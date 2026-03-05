@@ -16,7 +16,8 @@ public class Processes extends AndroidArtifact {
 
     @Override
     public List<String> paths() {
-        return List.of("processes.txt");
+        // AndroidQF uses "ps.txt"; keep "processes.txt" for legacy naming.
+        return List.of("processes.txt", "ps.txt");
     }
 
     @Override

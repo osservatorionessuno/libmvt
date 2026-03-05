@@ -6,8 +6,6 @@ import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.Detection;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 import org.osservatorionessuno.libmvt.common.Utils;
-import org.osservatorionessuno.bugbane.R;
-
 import java.util.List;
 import java.util.Map;
 import java.io.InputStream;
@@ -49,16 +47,16 @@ public class RootBinaries extends AndroidArtifact {
             // If a description is found, than the binary is known, otherwise it is unknown.
             String description = Utils.ROOT_BINARIES.get(binaryName.toLowerCase());
             if (description != null) {
-                detected.add(new Detection(AlertLevel.HIGH, getContext().getString(R.string.mvt_root_binaries_title),
+                detected.add(new Detection(AlertLevel.HIGH, getString("mvt_root_binaries_title"),
                     String.format(
-                        getContext().getString(R.string.mvt_root_binaries_message),
+                        getString("mvt_root_binaries_message"),
                         description,
                         path
                     )));
             } else {
-                detected.add(new Detection(AlertLevel.HIGH, getContext().getString(R.string.mvt_root_binaries_title),
+                detected.add(new Detection(AlertLevel.HIGH, getString("mvt_root_binaries_title"),
                     String.format(
-                        getContext().getString(R.string.mvt_root_binaries_message),
+                        getString("mvt_root_binaries_message"),
                         "unknown root file",
                         path
                     )));

@@ -1,7 +1,6 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.json.JSONException;
-import org.osservatorionessuno.bugbane.R;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.Detection;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
@@ -105,8 +104,8 @@ public class Files extends AndroidArtifact {
                         fileType = "executable ";
                     }
 
-                    String msg = String.format(getContext().getString(R.string.mvt_files_suspicious_path_message), fileType, path);
-                    detected.add(new Detection(AlertLevel.HIGH, getContext().getString(R.string.mvt_files_suspicious_path_title), msg));
+                    String msg = String.format(getString("mvt_files_suspicious_path_message"), fileType, path);
+                    detected.add(new Detection(AlertLevel.HIGH, getString("mvt_files_suspicious_path_title"), msg));
                 }
             }
  

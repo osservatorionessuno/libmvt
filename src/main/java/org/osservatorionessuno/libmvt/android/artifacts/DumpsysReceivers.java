@@ -1,6 +1,5 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
-import org.osservatorionessuno.bugbane.R;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 import org.osservatorionessuno.libmvt.common.Detection;
@@ -57,19 +56,19 @@ public class DumpsysReceivers extends AndroidArtifact {
             String intent = map.get("intent");
             switch (Objects.requireNonNull(intent)) {
                 case "android.provider.Telephony.NEW_OUTGOING_SMS":
-                    detected.add(new Detection(AlertLevel.LOG, getContext().getString(R.string.mvt_dumpsys_receivers_intercept_outgoing_sms_title), intent));
+                    detected.add(new Detection(AlertLevel.LOG, getString("mvt_dumpsys_receivers_intercept_outgoing_sms_title"), intent));
                     break;
                 case "android.provider.Telephony.SMS_RECEIVED":
-                    detected.add(new Detection(AlertLevel.LOG, getContext().getString(R.string.mvt_dumpsys_receivers_intercept_incoming_sms_title), intent));
+                    detected.add(new Detection(AlertLevel.LOG, getString("mvt_dumpsys_receivers_intercept_incoming_sms_title"), intent));
                     break;
                 case "android.intent.action.DATA_SMS_RECEIVED":
-                    detected.add(new Detection(AlertLevel.LOG, getContext().getString(R.string.mvt_dumpsys_receivers_intercept_data_sms_title), intent));
+                    detected.add(new Detection(AlertLevel.LOG, getString("mvt_dumpsys_receivers_intercept_data_sms_title"), intent));
                     break;
                 case "android.intent.action.PHONE_STATE":
-                    detected.add(new Detection(AlertLevel.LOG, getContext().getString(R.string.mvt_dumpsys_receivers_intercept_phone_state_title), intent));
+                    detected.add(new Detection(AlertLevel.LOG, getString("mvt_dumpsys_receivers_intercept_phone_state_title"), intent));
                     break;
                 case "android.intent.action.NEW_OUTGOING_CALL":
-                    detected.add(new Detection(AlertLevel.LOG, getContext().getString(R.string.mvt_dumpsys_receivers_intercept_outgoing_call_title), intent));
+                    detected.add(new Detection(AlertLevel.LOG, getString("mvt_dumpsys_receivers_intercept_outgoing_call_title"), intent));
                     break;
             }
 

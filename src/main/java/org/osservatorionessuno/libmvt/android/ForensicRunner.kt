@@ -1,10 +1,10 @@
 package org.osservatorionessuno.libmvt.android
 
-import android.content.Context
-import android.util.Log
 import org.osservatorionessuno.libmvt.android.artifacts.*
 import org.osservatorionessuno.libmvt.common.Artifact
 import org.osservatorionessuno.libmvt.common.Indicators
+import org.osservatorionessuno.libmvt.common.StringResolver
+import org.osservatorionessuno.libmvt.common.logging.LogUtils
 import java.io.File
 import java.io.InputStream
 import java.io.IOException
@@ -14,19 +14,21 @@ import java.util.zip.ZipFile
 
 /**
  * Simple helper to run the available AndroidQF artifact parsers on a folder
- * containing extracted androidqf data. Android 11+ safe (no Java 9/11 APIs).
+ * or zip containing extracted androidqf data.
  */
-class ForensicRunner(private val context: Context? = null) {
-
+class ForensicRunner(private val stringResolver: StringResolver) {
     private var indicators: Indicators? = null
 
     /** Assign indicators to use for IOC matching. */
     fun setIndicators(indicators: Indicators?) {
         this.indicators = indicators
-        indicators?.setContext(context)
+        this.indicators?.setStringResolver(stringResolver)
     }
 
-    /** This is a LEGACY method to analyze a plaintext directory. */
+    /**
+     * This is an insecure method to analyze a plaintext directory.
+     * This should NOT be used in Bugbane, since it parses plaintext files.
+     */
     @Throws(Exception::class)
     fun streamLegacyAnalysisFromDirectory(directory: File): Map<String, Artifact> {
         val map = LinkedHashMap<String, Artifact>()
@@ -75,7 +77,7 @@ class ForensicRunner(private val context: Context? = null) {
             val fileName = path.split('/').last()
             val index = MODULES_MAP[fileName]
             if (index == null) {
-                Log.w("ForensicRunner", "Unknown file: $fileName")
+                LogUtils.w(TAG, "Unknown file: $fileName")
                 return null
             }
             val art = MODULES_LIST[index]
@@ -85,11 +87,9 @@ class ForensicRunner(private val context: Context? = null) {
     }
 
     private fun finalizeArtifact(art: AndroidArtifact): Artifact {
-        context?.let { ctx: Context ->
-            art.context = ctx
-        }
+        art.stringResolver = stringResolver
         indicators?.let { ind: Indicators ->
-            art.setIndicators(ind)
+            art.indicators = ind
             art.checkIndicators()
         }
         return art

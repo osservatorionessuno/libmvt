@@ -1,6 +1,5 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
-import org.osservatorionessuno.bugbane.R;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.Detection;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
@@ -82,31 +81,31 @@ public class Packages extends AndroidArtifact {
             PackageResult result = (PackageResult) r;
 
             if (Utils.ROOT_PACKAGES.contains(result.name)) {
-                detected.add(new Detection(AlertLevel.MEDIUM, getContext().getString(R.string.mvt_packages_root_package_title),
+                detected.add(new Detection(AlertLevel.MEDIUM, getString("mvt_packages_root_package_title"),
                     String.format(
-                        getContext().getString(R.string.mvt_packages_root_package_message),
+                        getString("mvt_packages_root_package_message"),
                         result.name
                     )));
                 continue;
             }
 
             if ("null".equals(result.installer) && !result.system) {
-                detected.add(new Detection(AlertLevel.HIGH, getContext().getString(R.string.mvt_packages_non_system_package_title),
+                detected.add(new Detection(AlertLevel.HIGH, getString("mvt_packages_non_system_package_title"),
                     String.format(
-                        getContext().getString(R.string.mvt_packages_non_system_package_message),
+                        getString("mvt_packages_non_system_package_message"),
                         result.name
                     )));
             } else if (Utils.THIRD_PARTY_STORE_INSTALLERS.contains(result.installer)) {
-                detected.add(new Detection(AlertLevel.INFO, getContext().getString(R.string.mvt_packages_third_party_store_package_title),
+                detected.add(new Detection(AlertLevel.INFO, getString("mvt_packages_third_party_store_package_title"),
                     String.format(
-                        getContext().getString(R.string.mvt_packages_third_party_store_package_message),
+                        getString("mvt_packages_third_party_store_package_message"),
                         result.installer,
                         result.name
                     )));
             } else if (Utils.BROWSER_INSTALLERS.contains(result.installer)) {
-                detected.add(new Detection(AlertLevel.MEDIUM, getContext().getString(R.string.mvt_packages_browser_package_title),
+                detected.add(new Detection(AlertLevel.MEDIUM, getString("mvt_packages_browser_package_title"),
                     String.format(
-                        getContext().getString(R.string.mvt_packages_browser_package_message),
+                        getString("mvt_packages_browser_package_message"),
                         result.installer,
                         result.name
                     )));
@@ -114,17 +113,17 @@ public class Packages extends AndroidArtifact {
 
 
             if (Utils.SECURITY_PACKAGES.contains(result.name) && result.disabled) {
-                detected.add(new Detection(AlertLevel.MEDIUM, getContext().getString(R.string.mvt_packages_security_package_title),
+                detected.add(new Detection(AlertLevel.MEDIUM, getString("mvt_packages_security_package_title"),
                     String.format(
-                        getContext().getString(R.string.mvt_packages_security_package_message),
+                        getString("mvt_packages_security_package_message"),
                         result.name
                     )));
             }
 
             if (Utils.SYSTEM_UPDATE_PACKAGES.contains(result.name) && result.disabled) {
-                detected.add(new Detection(AlertLevel.MEDIUM, getContext().getString(R.string.mvt_packages_system_update_package_title),
+                detected.add(new Detection(AlertLevel.MEDIUM, getString("mvt_packages_system_update_package_title"),
                     String.format(
-                        getContext().getString(R.string.mvt_packages_system_update_package_message),
+                        getString("mvt_packages_system_update_package_message"),
                         result.name
                     )));
             }

@@ -1,9 +1,5 @@
 package org.osservatorionessuno.libmvt.common;
 
-import org.osservatorionessuno.bugbane.R;
-import android.content.Context;
-import android.util.Log;
-
 import org.ahocorasick.trie.Emit;
 import org.ahocorasick.trie.Trie;
 import org.json.JSONArray;
@@ -57,6 +53,7 @@ public class Indicators {
     static {
         INDICATOR_CONFIG.put(IndicatorType.DOMAIN, Set.of("domain-name:value", "ipv4-addr:value"));
         INDICATOR_CONFIG.put(IndicatorType.URL, Set.of("url:value"));
+        // TODO: Add support for 16-char truncated process names
         INDICATOR_CONFIG.put(IndicatorType.PROCESS, Set.of("process:name"));
         INDICATOR_CONFIG.put(IndicatorType.EMAIL, Set.of("email-addr:value"));
         INDICATOR_CONFIG.put(IndicatorType.APP_ID, Set.of("app:id"));
@@ -74,12 +71,12 @@ public class Indicators {
 
     private final Map<IndicatorType, Trie.TrieBuilder> trieBuilders;
     private final Map<IndicatorType, Trie> tries;
-    private Context context;
+    private StringResolver stringResolver = new JvmMapStringResolver();
 
     public Indicators() {
         this.trieBuilders = new EnumMap<>(IndicatorType.class);
         this.tries = new EnumMap<>(IndicatorType.class);
-        
+
         // Initialize builders for all configured indicator types
         for (IndicatorType type : INDICATOR_CONFIG.keySet()) {
             trieBuilders.put(type, Trie.builder().ignoreCase());
@@ -87,10 +84,14 @@ public class Indicators {
     }
 
     /**
-     * Set the Android Context for accessing resources (e.g., string resources).
+     * Set the resolver used to obtain human-readable strings.
+     * On Android, pass {@code StringResolver.forAndroid(context)}.
+     * On JVM, you may pass {@code StringResolver.forJvmDefault()} or a custom instance.
      */
-    public void setContext(Context context) {
-        this.context = context;
+    public void setStringResolver(StringResolver resolver) {
+        if (resolver != null) {
+            this.stringResolver = resolver;
+        }
     }
 
     /** Load indicators from a folder containing .json or .stix2 files. */
@@ -170,9 +171,8 @@ public class Indicators {
                 Trie.TrieBuilder builder = trieBuilders.get(entry.getKey());
                 if (builder != null) {
                     builder.addKeyword(vLower);
-                } else {
-                    Log.d(TAG, "Indicator type not supported: " + entry.getKey());
                 }
+                // else: indicator type not supported (no Android Log on JVM)
                 return;
             }
         }
@@ -215,22 +215,25 @@ public class Indicators {
 
     /** Match string against loaded indicators. */
     public List<Detection> matchString(String s, IndicatorType type) {
-        if (s == null || context == null) return Collections.emptyList();
-        
+        if (s == null) return Collections.emptyList();
+
         Trie trie = tries.get(type);
         if (trie == null) return Collections.emptyList();
-        
+
         String lower = s.toLowerCase();
         List<Detection> detections = new ArrayList<>();
+        StringResolver resolver = (stringResolver != null) ? stringResolver : new JvmMapStringResolver();
+        String title = resolver.get("mvt_ioc_title");
+        String messageFormat = resolver.get("mvt_ioc_message");
 
         for (Emit e : trie.parseText(lower)) {
             detections.add(new Detection(
                 AlertLevel.CRITICAL,
-                context.getString(R.string.mvt_ioc_title),
-                String.format(context.getString(R.string.mvt_ioc_message), type.name(), e.getKeyword(), s)
+                title,
+                String.format(messageFormat, type.name(), e.getKeyword(), s)
             ));
         }
-        
+
         return detections;
     }
 

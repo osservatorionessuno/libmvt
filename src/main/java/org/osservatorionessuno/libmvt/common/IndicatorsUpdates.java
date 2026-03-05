@@ -1,5 +1,7 @@
 package org.osservatorionessuno.libmvt.common;
 
+import org.osservatorionessuno.libmvt.common.logging.LogUtils;
+
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
@@ -33,18 +35,17 @@ public class IndicatorsUpdates {
     public static final Path MVT_DATA_FOLDER = Paths.get(System.getProperty("user.home"), ".mvt");
 
     private static final String TAG = "IndicatorsUpdates";
-    private static final boolean HAS_ANDROID_LOG;
-    static {
-        boolean present;
-        try { Class.forName("android.util.Log"); present = true; }
-        catch (Throwable t) { present = false; }
-        HAS_ANDROID_LOG = present;
+
+    private static void logI(String msg) {
+        LogUtils.i(TAG, msg);
     }
-    private static void logI(String msg) { if (HAS_ANDROID_LOG) android.util.Log.i(TAG, msg); else System.out.println(TAG + " I: " + msg); }
-    private static void logW(String msg) { if (HAS_ANDROID_LOG) android.util.Log.w(TAG, msg); else System.out.println(TAG + " W: " + msg); }
+
+    private static void logW(String msg) {
+        LogUtils.w(TAG, msg);
+    }
+
     private static void logE(String msg, Throwable t) {
-        if (HAS_ANDROID_LOG) android.util.Log.e(TAG, msg, t);
-        else { System.err.println(TAG + " E: " + msg); if (t != null) t.printStackTrace(); }
+        LogUtils.e(TAG, msg, t);
     }
 
     private final Path latestUpdatePath;

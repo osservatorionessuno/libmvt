@@ -1,6 +1,5 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
-import org.osservatorionessuno.bugbane.R;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.Detection;
 
@@ -67,8 +66,8 @@ public class Settings extends AndroidArtifact {
             if (ds != null &&
                 !ds.safeValue.equals(entry.getValue())) {
                 detected.add(new Detection(
-                        AlertLevel.INFO, getContext().getString(R.string.mvt_dangerous_settings_title),
-                        String.format(getContext().getString(R.string.mvt_dangerous_settings_message),
+                        AlertLevel.INFO, getString("mvt_dangerous_settings_title"),
+                        String.format(getString("mvt_dangerous_settings_message"),
                             ds.description, entry.getKey(), entry.getValue()
                         )));
             }

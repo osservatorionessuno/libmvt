@@ -1,23 +1,20 @@
 package org.osservatorionessuno.libmvt.android.artifacts
 
-import android.content.Context
 import org.osservatorionessuno.libmvt.common.Artifact
+import org.osservatorionessuno.libmvt.common.StringResolver
 import java.io.InputStream
 import java.io.IOException
+import java.io.ByteArrayInputStream
 
-/**
- * Base class for Android-related artifact parsers.
- * Operates on Strings and InputStreams.
- */
 abstract class AndroidArtifact : Artifact() {
 
-    var context: Context? = null
-        @JvmName("setContext") set
+    var stringResolver: StringResolver? = null
+        @JvmName("setStringResolver") set
 
-    /**
-     * Return the file name(s) this module reads (e.g. "dumpsys.txt", "packages.json").
-     * Used to build file -> module index mapping.
-     */
+
+    protected fun getString(name: String): String =
+        stringResolver?.get(name) ?: ""
+
     abstract fun paths(): List<String>
 
     @Throws(IOException::class)
