@@ -36,18 +36,6 @@ public class IndicatorsUpdates {
 
     private static final String TAG = "IndicatorsUpdates";
 
-    private static void logI(String msg) {
-        LogUtils.i(TAG, msg);
-    }
-
-    private static void logW(String msg) {
-        LogUtils.w(TAG, msg);
-    }
-
-    private static void logE(String msg, Throwable t) {
-        LogUtils.e(TAG, msg, t);
-    }
-
     private final Path latestUpdatePath;
     private final Path latestCheckPath;
     private final Path indicatorsFolder;
@@ -67,7 +55,7 @@ public class IndicatorsUpdates {
 
         try { Files.createDirectories(base); } catch (IOException ignored) {}
         try { Files.createDirectories(indicatorsFolder); } catch (IOException ignored) {}
-        logI("Init with base=" + base + ", indicatorsFolder=" + indicatorsFolder + ", indexUrl=" + (indexUrl == null ? "(default GitHub)" : indexUrl));
+        LogUtils.i(TAG, "Init with base=" + base + ", indicatorsFolder=" + indicatorsFolder + ", indexUrl=" + (indexUrl == null ? "(default GitHub)" : indexUrl));
     }
 
     /** Return the folder where indicators are stored. */
@@ -80,7 +68,7 @@ public class IndicatorsUpdates {
     }
 
     private static String httpGetStringWithHeaders(String url, int timeoutMs, Map<String,String> headers) throws IOException {
-        logI("HTTP GET (string) url=" + url + " timeoutMs=" + timeoutMs);
+        LogUtils.d(TAG, "HTTP GET (string) url=" + url + " timeoutMs=" + timeoutMs);
         HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
         conn.setConnectTimeout(timeoutMs);
         conn.setReadTimeout(timeoutMs);
@@ -97,7 +85,7 @@ public class IndicatorsUpdates {
         int code = conn.getResponseCode();
         long clen = -1;
         try { clen = conn.getContentLengthLong(); } catch (Throwable ignored) {}
-        logI("Response code=" + code + " contentLength=" + clen);
+        LogUtils.d(TAG, "Response code=" + code + " contentLength=" + clen);
 
         if (code != HttpURLConnection.HTTP_OK) {
             try (InputStream err = conn.getErrorStream()) {
@@ -106,7 +94,7 @@ public class IndicatorsUpdates {
                         StringBuilder esb = new StringBuilder();
                         char[] buf = new char[2048];
                         int n; while ((n = br.read(buf)) >= 0) esb.append(buf, 0, n);
-                        logW("Error body: " + esb);
+                        LogUtils.w(TAG, "Error body: " + esb);
                     }
                 }
             } finally { conn.disconnect(); }
@@ -120,13 +108,13 @@ public class IndicatorsUpdates {
             char[] buf = new char[8192];
             int n, total = 0;
             while ((n = br.read(buf)) >= 0) { sb.append(buf, 0, n); total += n; }
-            logI("Downloaded text chars=" + total);
+            LogUtils.d(TAG, "Downloaded text chars=" + total);
         } finally { conn.disconnect(); }
         return sb.toString();
     }
 
     private static boolean httpGetToFile(String url, Path dest, int timeoutMs) throws IOException {
-        logI("HTTP GET (file) url=" + url + " -> " + dest + " timeoutMs=" + timeoutMs);
+        LogUtils.d(TAG, "HTTP GET (file) url=" + url + " -> " + dest + " timeoutMs=" + timeoutMs);
         HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
         conn.setConnectTimeout(timeoutMs);
         conn.setReadTimeout(timeoutMs);
@@ -137,7 +125,7 @@ public class IndicatorsUpdates {
         int code = conn.getResponseCode();
         long clen = -1;
         try { clen = conn.getContentLengthLong(); } catch (Throwable ignored) {}
-        logI("Response code=" + code + " contentLength=" + clen);
+        LogUtils.d(TAG, "Response code=" + code + " contentLength=" + clen);
 
         if (code != HttpURLConnection.HTTP_OK) {
             try (InputStream err = conn.getErrorStream()) {
@@ -146,7 +134,7 @@ public class IndicatorsUpdates {
                         StringBuilder esb = new StringBuilder();
                         char[] buf = new char[2048];
                         int n; while ((n = br.read(buf)) >= 0) esb.append(buf, 0, n);
-                        logW("Error body: " + esb);
+                        LogUtils.w(TAG, "Error body: " + esb);
                     }
                 }
             } finally { conn.disconnect(); }
@@ -159,7 +147,7 @@ public class IndicatorsUpdates {
              BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(dest.toFile()))) {
             byte[] buf = new byte[32 * 1024];
             int n; while ((n = in.read(buf)) >= 0) { out.write(buf, 0, n); totalBytes += n; }
-            logI("Saved file bytes=" + totalBytes + " to " + dest);
+            LogUtils.d(TAG, "Saved file bytes=" + totalBytes + " to " + dest);
         } finally { conn.disconnect(); }
         return true;
     }
@@ -186,20 +174,20 @@ public class IndicatorsUpdates {
                 ? indexUrl
                 : String.format(githubRawUrl, "mvt-project", "mvt-indicators", "main", "indicators.yaml");
 
-        logI("Fetching index url=" + url);
+        LogUtils.d(TAG, "Fetching index url=" + url);
         String text;
         if (url.startsWith("file://")) {
             Path p = Paths.get(URI.create(url));
-            logI("Reading local index from " + p);
+            LogUtils.d(TAG, "Reading local index from " + p);
             text = readSmallFile(p);
         } else {
             text = httpGetString(url, 15000);
-            if (text == null) { logW("Index fetch returned null"); return null; }
+            if (text == null) { LogUtils.w(TAG, "Index fetch returned null"); return null; }
         }
 
         final String trimmed = text.trim();
-        logI("Index length=" + trimmed.length());
-        logI("Parsing YAML index");
+        LogUtils.d(TAG, "Index length=" + trimmed.length());
+        LogUtils.d(TAG, "Parsing YAML index");
 
         try {
             LoaderOptions opts = new LoaderOptions();
@@ -209,7 +197,7 @@ public class IndicatorsUpdates {
             Object loaded = yaml.load(text);
 
             if (!(loaded instanceof Map)) {
-                logW("YAML root is not a map; got=" + (loaded == null ? "null" : loaded.getClass().getName()));
+                LogUtils.w(TAG, "YAML root is not a map; got=" + (loaded == null ? "null" : loaded.getClass().getName()));
                 return null;
             }
             Map<String, Object> root = (Map<String, Object>) loaded;
@@ -217,12 +205,12 @@ public class IndicatorsUpdates {
             try {
                 Object inds = root.get("indicators");
                 int size = (inds instanceof List) ? ((List<?>) inds).size() : -1;
-                logI("YAML parsed successfully; indicators.size=" + size);
+                LogUtils.d(TAG, "YAML parsed successfully; indicators.size=" + size);
             } catch (Throwable ignored) {}
 
             return root;
         } catch (Throwable t) {
-            logE("SnakeYAML parse failed", t);
+            LogUtils.e(TAG, "SnakeYAML parse failed", t);
             return null;
         }
     }
@@ -251,7 +239,7 @@ public class IndicatorsUpdates {
                     return new GhRef(seg[1], seg[2], seg[3], seg[4]);
                 }
             } catch (Throwable t) {
-                logW("resolveIndexGhRef failed for " + indexUrl + ": " + t);
+                LogUtils.w(TAG, "resolveIndexGhRef failed for " + indexUrl + ": " + t);
             }
         }
         return null; // not a GH raw URL; we can't commit-check it
@@ -264,12 +252,12 @@ public class IndicatorsUpdates {
 
         // Fallbacks for repos that changed default branch or mis-specified branch in YAML
         if (!"main".equals(branch)) {
-            logI("githubLatestCommitEpoch: retrying with branch=main");
+            LogUtils.d(TAG, "githubLatestCommitEpoch: retrying with branch=main");
             t = githubLatestCommitEpochOnce(owner, repo, "main", path);
             if (t > 0) return t;
         }
         if (!"master".equals(branch)) {
-            logI("githubLatestCommitEpoch: retrying with branch=master");
+            LogUtils.d(TAG, "githubLatestCommitEpoch: retrying with branch=master");
             t = githubLatestCommitEpochOnce(owner, repo, "master", path);
             if (t > 0) return t;
         }
@@ -292,21 +280,21 @@ public class IndicatorsUpdates {
 
             String body = httpGetStringWithHeaders(url, 15000, headers);
             if (body == null || body.isEmpty()) {
-                logW("githubLatestCommitEpochOnce: null/empty response for " + owner + "/" + repo + "@" + branch + " path=" + path);
+                LogUtils.w(TAG, "githubLatestCommitEpochOnce: null/empty response for " + owner + "/" + repo + "@" + branch + " path=" + path);
                 return 0L;
             }
 
             String iso = extractFirstIsoDateFromCommits(body);
             if (iso == null || iso.isEmpty()) {
-                logW("githubLatestCommitEpochOnce: no date found in response (commits empty?)");
+                LogUtils.w(TAG, "githubLatestCommitEpochOnce: no date found in response (commits empty?)");
                 return 0L;
             }
             long epoch = java.time.Instant.parse(iso).getEpochSecond();
-            logI("githubLatestCommitEpochOnce: " + owner + "/" + repo + "@" + branch + " path=" + path
+            LogUtils.d(TAG, "githubLatestCommitEpochOnce: " + owner + "/" + repo + "@" + branch + " path=" + path
                     + " -> " + iso + " (" + epoch + ")");
             return epoch;
         } catch (Exception e) {
-            logW("githubLatestCommitEpochOnce failed: " + e);
+            LogUtils.w(TAG, "githubLatestCommitEpochOnce failed: " + e);
             return 0L;
         }
     }
@@ -328,7 +316,7 @@ public class IndicatorsUpdates {
                 // Often an error/rate-limit object: {"message": "...", "status": "...", ...}
                 JSONObject obj = (JSONObject) parsed;
                 String msg = obj.optString("message", "");
-                if (!msg.isEmpty()) logW("GitHub API message: " + msg);
+                if (!msg.isEmpty()) LogUtils.w(TAG, "GitHub API message: " + msg);
                 return null;
             } else {
                 return null;
@@ -352,17 +340,17 @@ public class IndicatorsUpdates {
         if (idx != null && idx.isComplete()) {
             long t = githubLatestCommitEpoch(idx.owner, idx.repo, idx.branch, idx.path);
             if (t > latestUpdate) {
-                logI("Index newer than latestUpdate (" + t + " > " + latestUpdate + ")");
+                LogUtils.d(TAG, "Index newer than latestUpdate (" + t + " > " + latestUpdate + ")");
                 return true;
             }
         } else {
-            logI("Index is not a GitHub raw URL; skipping index commit check");
+            LogUtils.d(TAG, "Index is not a GitHub raw URL; skipping index commit check");
         }
 
         // 2) If index didn't change, check each indicator github entry
         Object indicators = index.get("indicators");
         if (!(indicators instanceof Iterable<?>)) {
-            logW("isUpdateAvailable: 'indicators' not iterable");
+            LogUtils.w(TAG, "isUpdateAvailable: 'indicators' not iterable");
             return false;
         }
         for (Object obj : (Iterable<?>) indicators) {
@@ -384,11 +372,11 @@ public class IndicatorsUpdates {
 
             long t = githubLatestCommitEpoch(owner, repo, branch, path);
             if (t > latestUpdate) {
-                logI("Indicator newer than latestUpdate (" + t + " > " + latestUpdate + ") for " + owner + "/" + repo + "@" + branch + " path=" + path);
+                LogUtils.d(TAG, "Indicator newer than latestUpdate (" + t + " > " + latestUpdate + ") for " + owner + "/" + repo + "@" + branch + " path=" + path);
                 return true;
             }
         }
-        logI("No remote updates detected vs latestUpdate=" + latestUpdate);
+        LogUtils.d(TAG, "No remote updates detected vs latestUpdate=" + latestUpdate);
         return false;
     }
 
@@ -398,17 +386,17 @@ public class IndicatorsUpdates {
         Files.createDirectories(indicatorsFolder);
         String fileName = url.replaceFirst("^https?://", "").replaceAll("[/\\\\]", "_");
         Path dest = indicatorsFolder.resolve(fileName);
-        logI("Downloading IOC url=" + url + " -> " + dest);
+        LogUtils.d(TAG, "Downloading IOC url=" + url + " -> " + dest);
 
         if (url.startsWith("file://")) {
             Path p = Paths.get(URI.create(url));
             Files.copy(p, dest, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            logI("Copied local IOC " + p + " -> " + dest);
+            LogUtils.d(TAG, "Copied local IOC " + p + " -> " + dest);
             return dest.toString();
         }
 
         boolean ok = httpGetToFile(url, dest, 15000);
-        if (!ok) { logW("Failed to download IOC: " + url); return null; }
+        if (!ok) { LogUtils.w(TAG, "Failed to download IOC: " + url); return null; }
         return dest.toString();
     }
 
@@ -417,52 +405,52 @@ public class IndicatorsUpdates {
     public long getLatestCheck() {
         try {
             long v = Long.parseLong(readSmallFile(latestCheckPath).trim());
-            logI("getLatestCheck=" + v + " (" + latestCheckPath + ")");
+            LogUtils.d(TAG, "getLatestCheck=" + v + " (" + latestCheckPath + ")");
             return v;
         } catch (IOException | NumberFormatException e) {
-            logW("getLatestCheck missing or invalid (" + latestCheckPath + ")");
+            LogUtils.w(TAG, "getLatestCheck missing or invalid (" + latestCheckPath + ")");
             return 0;
         }
     }
 
     private void setLatestCheck() {
-        try { long now = Instant.now().getEpochSecond(); writeSmallFile(latestCheckPath, Long.toString(now)); logI("setLatestCheck=" + now + " (" + latestCheckPath + ")"); }
-        catch (IOException ignored) { logW("setLatestCheck failed"); }
+        try { long now = Instant.now().getEpochSecond(); writeSmallFile(latestCheckPath, Long.toString(now)); LogUtils.d(TAG, "setLatestCheck=" + now + " (" + latestCheckPath + ")"); }
+        catch (IOException ignored) { LogUtils.w(TAG, "setLatestCheck failed"); }
     }
 
     public long getLatestUpdate() {
         try {
             long v = Long.parseLong(readSmallFile(latestUpdatePath).trim());
-            logI("getLatestUpdate=" + v + " (" + latestUpdatePath + ")");
+            LogUtils.d(TAG, "getLatestUpdate=" + v + " (" + latestUpdatePath + ")");
             return v;
         } catch (IOException | NumberFormatException e) {
-            logW("getLatestUpdate missing or invalid (" + latestUpdatePath + ")");
+            LogUtils.w(TAG, "getLatestUpdate missing or invalid (" + latestUpdatePath + ")");
             return 0;
         }
     }
 
     private void setLatestUpdate() {
-        try { long now = Instant.now().getEpochSecond(); writeSmallFile(latestUpdatePath, Long.toString(now)); logI("setLatestUpdate=" + now + " (" + latestUpdatePath + ")"); }
-        catch (IOException ignored) { logW("setLatestUpdate failed"); }
+        try { long now = Instant.now().getEpochSecond(); writeSmallFile(latestUpdatePath, Long.toString(now)); LogUtils.d(TAG, "setLatestUpdate=" + now + " (" + latestUpdatePath + ")"); }
+        catch (IOException ignored) { LogUtils.w(TAG, "setLatestUpdate failed"); }
     }
 
     // --------------------- Public API ---------------------
 
     public Path download(String url) throws IOException {
-        logI("download() called with url=" + url);
+        LogUtils.d(TAG, "download() called with url=" + url);
         String dl = downloadRemoteIoc(url);
         Path p = (dl != null) ? Paths.get(dl) : null;
-        logI("download() result=" + p);
+        LogUtils.d(TAG, "download() result=" + p);
         return p;
     }
 
     @SuppressWarnings("unchecked")
     public void update() throws IOException {
-        logI("update() start");
+        LogUtils.d(TAG, "update() start");
         setLatestCheck();
 
         Map<String, Object> index = getRemoteIndex();
-        if (index == null) { logW("update() no index"); return; }
+        if (index == null) { LogUtils.w(TAG, "update() no index"); return; }
 
         long latestUpdate = getLatestUpdate();
 
@@ -475,7 +463,7 @@ public class IndicatorsUpdates {
             if (ip.changed) { anythingChanged = true; break; }
         }
         if (!anythingChanged) {
-            logI("No updates available; skipping downloads");
+            LogUtils.i(TAG, "No updates available; skipping downloads");
             return;
         }
 
@@ -485,26 +473,26 @@ public class IndicatorsUpdates {
             if (!ip.changed) continue;
             attempted++;
             String res = downloadRemoteIoc(ip.url);
-            if (res != null) { succeeded++; logI("update() downloaded -> " + res); }
-            else { logW("update() failed -> " + ip.url); }
+            if (res != null) { succeeded++; LogUtils.d(TAG, "update() downloaded -> " + res); }
+            else { LogUtils.w(TAG, "update() failed -> " + ip.url); }
         }
 
         if (succeeded > 0) {
             setLatestUpdate();
         } else {
-            logW("No files succeeded; not updating latest_indicators_update");
+            LogUtils.w(TAG, "No files succeeded; not updating latest_indicators_update");
         }
-        logI("update() done: attempted=" + attempted + " succeeded=" + succeeded);
+        LogUtils.d(TAG, "update() done: attempted=" + attempted + " succeeded=" + succeeded);
     }
 
 
     public long countIndicators() {
         try (java.util.stream.Stream<Path> stream = Files.list(indicatorsFolder)) {
             long c = stream.count();
-            logI("countIndicators folder=" + indicatorsFolder + " count=" + c);
+            LogUtils.d(TAG, "countIndicators folder=" + indicatorsFolder + " count=" + c);
             return c;
         } catch (IOException e) {
-            logE("countIndicators failed for " + indicatorsFolder, e);
+            LogUtils.e(TAG, "countIndicators failed for " + indicatorsFolder, e);
             return 0;
         }
     }
@@ -538,18 +526,18 @@ public class IndicatorsUpdates {
         if (idx != null && idx.isComplete()) {
             indexEpoch = githubLatestCommitEpoch(idx.owner, idx.repo, idx.branch, idx.path);
             if (indexEpoch > 0) {
-                logI("Index latest epoch=" + indexEpoch + " (latestUpdate=" + latestUpdate + ")");
+                LogUtils.d(TAG, "Index latest epoch=" + indexEpoch + " (latestUpdate=" + latestUpdate + ")");
             } else {
-                logW("Could not resolve latest commit epoch for index; treating non-GitHub items conservatively.");
+                LogUtils.w(TAG, "Could not resolve latest commit epoch for index; treating non-GitHub items conservatively.");
             }
         } else {
-            logI("Index not a GitHub raw URL; skipping index commit check");
+            LogUtils.d(TAG, "Index not a GitHub raw URL; skipping index commit check");
         }
 
         // 2) Iterate indicators and decide per-item freshness
         Object indicators = index.get("indicators");
         if (!(indicators instanceof Iterable<?>)) {
-            logW("buildDownloadPlan: 'indicators' not iterable");
+            LogUtils.w(TAG, "buildDownloadPlan: 'indicators' not iterable");
             return plan;
         }
 
@@ -559,7 +547,7 @@ public class IndicatorsUpdates {
 
             String url = indicatorDownloadUrl(item);
             if (url == null || url.trim().isEmpty()) {
-                logW("buildDownloadPlan: skipped item with empty url");
+                LogUtils.w(TAG, "buildDownloadPlan: skipped item with empty url");
                 continue;
             }
 
@@ -622,7 +610,7 @@ public class IndicatorsUpdates {
                     reason  = "non-github; follow index (indexEpoch=" + indexEpoch + ")";
                 }            }
 
-            logI("plan: " + (changed ? "FETCH  " : "SKIP   ") + url + "  -- " + reason);
+            LogUtils.d(TAG, "plan: " + (changed ? "FETCH  " : "SKIP   ") + url + "  -- " + reason);
             plan.add(new IndicatorPlan(url, changed, reason));
         }
 
