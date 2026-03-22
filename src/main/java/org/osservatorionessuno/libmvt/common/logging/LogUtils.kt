@@ -3,11 +3,28 @@ package org.osservatorionessuno.libmvt.common.logging
 object LogUtils {
 
     @Volatile
+    private var debugEnabled: Boolean = false
+
+    @Volatile
     private var logger: LibmvtLogger = StdoutLibmvtLogger()
+
+    @JvmStatic
+    fun setDebugEnabled(enabled: Boolean) {
+        debugEnabled = enabled
+    }
+
+    @JvmStatic
+    fun isDebugEnabled(): Boolean = debugEnabled
 
     @JvmStatic
     fun setLogger(logger: LibmvtLogger?) {
         this.logger = logger ?: StdoutLibmvtLogger()
+    }
+
+    @JvmStatic
+    fun d(tag: String?, msg: String?) {
+        if (!debugEnabled) return
+        logger.d(tag, msg)
     }
 
     @JvmStatic
@@ -21,7 +38,7 @@ object LogUtils {
     }
 
     @JvmStatic
-    fun e(tag: String?, msg: String?, t: Throwable?) {
+    fun e(tag: String?, msg: String?, t: Throwable? = null) {
         logger.e(tag, msg, t)
     }
 }

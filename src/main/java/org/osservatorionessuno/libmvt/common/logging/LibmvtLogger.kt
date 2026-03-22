@@ -6,7 +6,8 @@ package org.osservatorionessuno.libmvt.common.logging
  * Host applications (e.g. Bugbane) can provide their own implementation.
  */
 interface LibmvtLogger {
-
+    fun d(tag: String?, msg: String?)
+    
     fun i(tag: String?, msg: String?)
 
     fun w(tag: String?, msg: String?)

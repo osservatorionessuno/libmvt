@@ -2,6 +2,11 @@ package org.osservatorionessuno.libmvt.common.logging
 
 class StdoutLibmvtLogger : LibmvtLogger {
 
+    override fun d(tag: String?, msg: String?) {
+        if (msg == null) return
+        println(format("D", tag, msg))
+    }
+
     override fun i(tag: String?, msg: String?) {
         if (msg == null) return
         println(format("I", tag, msg))
