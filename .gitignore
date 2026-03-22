@@ -1,8 +1,10 @@
 .gradle/
+.vscode/
 build/
 out/
 bin/
 
+gradle.properties
 *.iml
 *.ipr
 *.iws

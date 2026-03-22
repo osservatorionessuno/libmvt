@@ -6,13 +6,19 @@ plugins {
 group = "org.osservatorionessuno"
 version = "0.0.1"
 
-val generatedSourcesDir = "$buildDir/generated/sources/buildInfo/kotlin"
+val generatedSourcesDir = layout.buildDirectory.dir("generated/sources/buildInfo/kotlin")
 
 repositories {
     mavenCentral()
+    google()
+    maven("https://jitpack.io")
 }
 
 dependencies {
+    // https://github.com/rednaga/axmlprinter — JitPack: v1.0.0 ok; v2.0.0 tag currently fails to build there
+    implementation("com.github.rednaga:axmlprinter:v1.0.0")
+    // https://android.googlesource.com/platform/tools/apksig/ (published as com.android.tools.build:apksig)
+    implementation("com.android.tools.build:apksig:8.13.2")
     implementation("org.json:json:20240303")
     implementation("org.ahocorasick:ahocorasick:0.6.3")
     implementation("org.yaml:snakeyaml:2.2")
@@ -25,8 +31,9 @@ application {
 }
 
 tasks.register("generateBuildInfo") {
-    val outputDir = file(generatedSourcesDir)
-    outputs.dir(outputDir)
+    outputs.dir(generatedSourcesDir)
+
+    val outputDir = generatedSourcesDir.get().asFile
 
     doLast {
         val pkg = "org.osservatorionessuno"
