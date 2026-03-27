@@ -5,7 +5,6 @@ import kotlinx.cli.ArgType
 import kotlinx.cli.default
 import kotlinx.cli.optional
 import org.osservatorionessuno.libmvt.common.logging.LogUtils
-import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 
@@ -14,9 +13,25 @@ object CliArgs {
     private const val PROGRAM_NAME: String = BuildInfo.NAME
     private const val VERSION: String = BuildInfo.VERSION
 
+    internal fun defaultIndicatorsDir(): Path =
+        Paths.get(System.getProperty("user.home")).resolve(".mvt").resolve("iocs").normalize()
+
+    internal fun resolveIndicatorsPath(pathOption: String?): Path {
+        if (pathOption.isNullOrBlank()) return defaultIndicatorsDir()
+        val t = pathOption.trim()
+        val home = Paths.get(System.getProperty("user.home"))
+        val raw = when {
+            t == "~" -> home
+            t.startsWith("~/") -> home.resolve(t.removePrefix("~/"))
+            t.startsWith("~\\") -> home.resolve(t.removePrefix("~\\"))
+            else -> Paths.get(t)
+        }
+        return raw.normalize()
+    }
+
     data class CliOptions(
-        val indicatorsDir: Path?,
-        val inputPath: Path,
+        val indicatorsDir: Path,
+        val inputPath: String?,
         val updateIndicators: Boolean,
         val pretty: Boolean,
         val showVersion: Boolean,
@@ -32,7 +47,7 @@ object CliArgs {
             ArgType.String,
             shortName = "i",
             fullName = "indicators",
-            description = "Directory with .json/.stix2 indicator files",
+            description = "Directory with .json/.stix2 indicator files (default: ~/.mvt/iocs)",
         )
 
         val updateIndicators by parser.option(
@@ -83,22 +98,15 @@ object CliArgs {
 
         LogUtils.setDebugEnabled(verbose)
 
-        if (showVersion && inputPathArg == null) {
+        if (showVersion) {
             println("$PROGRAM_NAME $VERSION")
             kotlin.system.exitProcess(0)
         }
 
-        val inputPath = inputPathArg ?: throw CliException("Input path missing or not found")
-
-        val resolvedInput = Paths.get(inputPath)
-        if (!Files.exists(resolvedInput)) {
-            throw CliException("Input path missing or not found: $resolvedInput")
-        }
-
         return CliOptions(
-            indicatorsDir = indicatorsDir?.let { Paths.get(it) },
+            indicatorsDir = resolveIndicatorsPath(indicatorsDir),
             updateIndicators = updateIndicators,
-            inputPath = resolvedInput,
+            inputPath = inputPathArg,
             pretty = pretty,
             showVersion = showVersion,
             analyzeAPK = analyzeAPK,

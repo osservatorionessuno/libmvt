@@ -75,8 +75,14 @@ class ForensicRunner(private val stringResolver: StringResolver) {
     fun streamFileAnalysis(path: String, content: InputStream): Artifact? {
         content.use {
             val fileName = path.split('/').last()
+            if (fileName in SKIP_FILES) {
+                LogUtils.d(TAG, "Skipping file: $fileName")
+                return null
+            }
+
             val index = MODULES_MAP[fileName]
             if (index == null) {
+                // TODO: convert to debug log once in production
                 LogUtils.w(TAG, "Unknown file: $fileName")
                 return null
             }
@@ -120,6 +126,7 @@ class ForensicRunner(private val stringResolver: StringResolver) {
                 SMS(),
                 RootBinaries(),
                 Mounts(),
+                SELinux(),
         )
 
         /** Map from file name to artifact instance, built from MODULES_LIST paths(). */
@@ -133,5 +140,11 @@ class ForensicRunner(private val stringResolver: StringResolver) {
             }
             map
         }
+
+        @JvmField
+        val SKIP_FILES: List<String> = listOf(
+            "env.txt",
+            "acquisition.json",
+        )
     }
 }

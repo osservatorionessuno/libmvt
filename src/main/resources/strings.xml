@@ -40,5 +40,7 @@
     <string name="mvt_dumpsys_receivers_intercept_data_sms_title">Found a receiver to intercept incoming data SMS messages: %1$s</string>
     <string name="mvt_dumpsys_receivers_intercept_phone_state_title">Found a receiver monitoring telephony state/incoming calls: %1$s</string>
     <string name="mvt_dumpsys_receivers_intercept_outgoing_call_title">Found a receiver monitoring outgoing calls: %1$s</string>
+    <string name="mvt_selinux_status_title">SELinux status</string>
+    <string name="mvt_selinux_status_message">SELinux is not being enforced: %1$s</string>
 </resources>
 

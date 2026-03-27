@@ -69,6 +69,10 @@ java {
     withJavadocJar()
 }
 
+tasks.named<Jar>("sourcesJar") {
+    dependsOn("generateBuildInfo")
+}
+
 tasks.jar {
     manifest {
         attributes(

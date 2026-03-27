@@ -25,10 +25,11 @@ object Main {
                 kotlin.system.exitProcess(0)
             }
 
-            val inputPath: File = cli.inputPath.toFile()
+            val inputPath: File = File(cli.inputPath)
+
             if (cli.analyzeAPK) {
                 if (inputPath.isFile && inputPath.extension == "apk") {
-                    analyzeAPK(cli.inputPath.toFile())
+                    analyzeAPK(inputPath)
                 } else {
                     val apkFiles = inputPath.listFiles { file -> file.isFile && file.extension.equals("apk", ignoreCase = true) }
                     if (apkFiles != null && apkFiles.isNotEmpty()) {
@@ -63,7 +64,7 @@ object Main {
             setIndicators(indicators)
         }
 
-        val inputFile: File = cli.inputPath.toFile()
+        val inputFile: File = File(cli.inputPath)
         val results: Map<String, Artifact> = when {
             inputFile.isDirectory -> runner.streamLegacyAnalysisFromDirectory(inputFile)
             inputFile.name.lowercase().endsWith(".zip") -> runner.streamAnalysisFromZip(inputFile)
@@ -73,14 +74,19 @@ object Main {
         return buildDetectionsArray(results)
     }
 
-    private fun loadIndicators(indicatorsDir: Path?): Indicators {
+    private fun loadIndicators(indicatorsDir: Path): Indicators {
         val indicators = Indicators()
 
-        if (indicatorsDir == null || !Files.exists(indicatorsDir) || !Files.isDirectory(indicatorsDir)) {
-            throw CliArgs.CliException("Indicators directory missing or not found: $indicatorsDir")
+        if (!Files.exists(indicatorsDir) || !Files.isDirectory(indicatorsDir)) {
+            val hint =
+                "Run with --update-indicators to download IOCs into ${CliArgs.defaultIndicatorsDir()}, " +
+                    "or pass -i /path/to/iocs with .json/.stix2 files."
+            throw CliArgs.CliException(
+                "Indicators directory missing or not found: $indicatorsDir. $hint",
+            )
         }
 
-        indicators.loadFromDirectory(indicatorsDir.toFile()) 
+        indicators.loadFromDirectory(indicatorsDir.toFile())
         return indicators
     }
 
