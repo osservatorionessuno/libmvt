@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.io.BufferedWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.util.List;
 
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 
@@ -20,8 +21,8 @@ public class IndicatorsUpdatesTest {
         String index =
                 "indicators:\n" +
                         "  - name: local\n" +
-                        "    type: download\n" +
-                        "    download_url: " + stix.toUri().toString() + "\n";
+                        "    type: url\n" +
+                        "    url: " + stix.toUri().toString() + "\n";
 
         Path indexFile = Files.createTempFile(temp, "index", ".yaml");
         try (BufferedWriter bw = Files.newBufferedWriter(indexFile, StandardCharsets.UTF_8,
@@ -29,7 +30,7 @@ public class IndicatorsUpdatesTest {
             bw.write(index);
         }
 
-        IndicatorsUpdates updates = new IndicatorsUpdates(temp, indexFile.toUri().toString());
+        IndicatorsUpdates updates = new IndicatorsUpdates(temp, List.of(indexFile.toUri().toString()));
         updates.update();
 
         Path indicatorsDir = temp.resolve("iocs");
@@ -42,5 +43,38 @@ public class IndicatorsUpdatesTest {
         Indicators indicators = new Indicators();
         indicators.loadFromDirectory(indicatorsDir.toFile());
         assertFalse(indicators.matchString("shortenurls.me", IndicatorType.DOMAIN).isEmpty());
+    }
+
+    @Test
+    public void testUpdateFromUrl() throws Exception {
+        Path temp = Files.createTempDirectory("mvt");
+
+        String stix = "https://raw.githubusercontent.com/mvt-project/mvt-indicators/refs/heads/main/cellebrite/cellebrite.stix2";
+        String index =
+                "indicators:\n" +
+                        "  - name: url\n" +
+                        "    type: url\n" +
+                        "    url: https://raw.githubusercontent.com/mvt-project/mvt-indicators/refs/heads/main/cellebrite/cellebrite.stix2\n";
+
+        Path indexFile = Files.createTempFile(temp, "index", ".yaml");
+        try (BufferedWriter bw = Files.newBufferedWriter(indexFile, StandardCharsets.UTF_8,
+                StandardOpenOption.TRUNCATE_EXISTING)) {
+            bw.write(index);
+        }
+
+        IndicatorsUpdates updates = new IndicatorsUpdates(temp, List.of(indexFile.toUri().toString()));
+        updates.update();
+
+        Path indicatorsDir = temp.resolve("iocs");
+        // Match IndicatorsUpdates' filename logic: replace only http(s) scheme and slash/backslash with '_'
+        String fileName = stix
+                .replaceFirst("^https?://", "")
+                .replaceAll("[/\\\\]", "_");
+
+        assertTrue(Files.exists(indicatorsDir.resolve(fileName)));
+
+        Indicators indicators = new Indicators();
+        indicators.loadFromDirectory(indicatorsDir.toFile());
+        assertFalse(indicators.matchString("com.client.appA", IndicatorType.APP_ID).isEmpty());
     }
 }
