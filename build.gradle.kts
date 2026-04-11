@@ -84,5 +84,8 @@ tasks.jar {
 
 tasks.test {
     useJUnitPlatform()
+    testLogging {
+        showStandardStreams = true
+    }
 }
 
