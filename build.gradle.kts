@@ -30,7 +30,7 @@ application {
     mainClass.set("org.osservatorionessuno.Main")
 }
 
-tasks.register("generateBuildInfo") {
+val generateBuildInfo = tasks.register("generateBuildInfo") {
     outputs.dir(generatedSourcesDir)
 
     val outputDir = generatedSourcesDir.get().asFile
@@ -56,12 +56,15 @@ tasks.register("generateBuildInfo") {
 kotlin {
     jvmToolchain(17)
     sourceSets.main {
-        kotlin.srcDir(generatedSourcesDir)
+        // Tell Gradle which task produces this directory to avoid implicit-dependency validation errors.
+        kotlin.srcDir(
+            files(generatedSourcesDir).builtBy(generateBuildInfo),
+        )
     }
 }
 
 tasks.compileKotlin {
-    dependsOn("generateBuildInfo")
+    dependsOn(generateBuildInfo)
 }
 
 java {
@@ -70,7 +73,7 @@ java {
 }
 
 tasks.named<Jar>("sourcesJar") {
-    dependsOn("generateBuildInfo")
+    dependsOn(generateBuildInfo)
 }
 
 tasks.jar {
