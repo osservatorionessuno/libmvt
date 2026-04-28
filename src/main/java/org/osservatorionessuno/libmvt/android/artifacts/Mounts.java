@@ -159,7 +159,7 @@ public class Mounts extends AndroidArtifact {
                     continue;
                 }
                 suspiciousMounts.add(mount);
-                detected.add(new Detection(AlertLevel.HIGH, getString("mvt_mounts_suspicious_title"),
+                detected.add(new Detection(AlertLevel.LOW, getString("mvt_mounts_suspicious_title"),
                     String.format(getString("mvt_mounts_suspicious_message"),
                         mountPoint, String.join(", ", suspiciousOpts)
                     )));

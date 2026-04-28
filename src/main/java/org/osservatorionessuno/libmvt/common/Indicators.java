@@ -79,7 +79,7 @@ public class Indicators {
 
         // Initialize builders for all configured indicator types
         for (IndicatorType type : INDICATOR_CONFIG.keySet()) {
-            trieBuilders.put(type, Trie.builder().ignoreCase());
+            trieBuilders.put(type, Trie.builder().ignoreCase().onlyWholeWords());
         }
     }
 
@@ -220,13 +220,12 @@ public class Indicators {
         Trie trie = tries.get(type);
         if (trie == null) return Collections.emptyList();
 
-        String lower = s.toLowerCase();
         List<Detection> detections = new ArrayList<>();
         StringResolver resolver = (stringResolver != null) ? stringResolver : new JvmMapStringResolver();
         String title = resolver.get("mvt_ioc_title");
         String messageFormat = resolver.get("mvt_ioc_message");
 
-        for (Emit e : trie.parseText(lower)) {
+        for (Emit e : trie.parseText(s)) {
             detections.add(new Detection(
                 AlertLevel.CRITICAL,
                 title,

@@ -85,7 +85,7 @@ class CompressedXmlParser {
                     WORD_SIZE
                 }
                 else -> {
-                    LogUtils.w("CompressedXmlParser", "Unknown chunk word $chunkWord")
+                    LogUtils.d("CompressedXmlParser", "Unknown chunk word $chunkWord")
                     WORD_SIZE
                 }
             }
@@ -391,7 +391,7 @@ class CompressedXmlParser {
             TYPE_ID_REF -> res = String.format(Locale.US, "@id/0x%08X", data)
             TYPE_ATTR_REF -> res = String.format(Locale.US, "?id/0x%08X", data)
             else -> {
-                LogUtils.w("CompressedXmlParser",
+                LogUtils.d("CompressedXmlParser",
                     "Unknown attribute type 0x${type.toString(16)} " +
                         "with data 0x${data.toString(16)}"
                 )

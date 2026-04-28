@@ -6,7 +6,6 @@ import java.security.MessageDigest
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import java.util.Date
-import javax.naming.ldap.LdapName
 import javax.security.auth.x500.X500Principal
 
 object CertificateParser {
@@ -28,11 +27,54 @@ object CertificateParser {
 
     @JvmStatic
     fun formatPrincipal(principal: X500Principal): String {
-        var oidMap = mapOf(
-            "1.2.840.113549.1.9.1" to "E"
-        )
-        val ldapName = LdapName(principal.getName(X500Principal.RFC2253, oidMap))
-        return ldapName.rdns.joinToString(",") { it.toString() }
+        val oidMap =
+            mapOf(
+                "1.2.840.113549.1.9.1" to "E",
+            )
+
+        // RFC2253 prints the most-specific RDN first (e.g., CN,...,C).
+        // For our output we want least-specific first (e.g., C,...,CN).
+        val rfc2253 = principal.getName(X500Principal.RFC2253, oidMap)
+        return splitRfc2253DnIntoRdns(rfc2253).asReversed().joinToString(",")
+    }
+
+    // We need this function cause LdapName is not available in Android
+    private fun splitRfc2253DnIntoRdns(dn: String): List<String> {
+        if (dn.isBlank()) return emptyList()
+
+        val parts = ArrayList<String>(8)
+        val sb = StringBuilder(dn.length)
+
+        var escaped = false
+        var inQuotes = false
+
+        for (c in dn) {
+            when {
+                escaped -> {
+                    sb.append(c)
+                    escaped = false
+                }
+                c == '\\' -> {
+                    sb.append(c)
+                    escaped = true
+                }
+                c == '"' -> {
+                    sb.append(c)
+                    inQuotes = !inQuotes
+                }
+                c == ',' && !inQuotes -> {
+                    val piece = sb.toString().trim()
+                    if (piece.isNotEmpty()) parts.add(piece)
+                    sb.setLength(0)
+                }
+                else -> sb.append(c)
+            }
+        }
+
+        val last = sb.toString().trim()
+        if (last.isNotEmpty()) parts.add(last)
+
+        return parts
     }
 
     @JvmStatic

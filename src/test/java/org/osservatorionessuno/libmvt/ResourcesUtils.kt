@@ -5,6 +5,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.io.InputStream
+import java.io.File
 
 object ResourcesUtils {
 
@@ -21,6 +22,13 @@ object ResourcesUtils {
     fun readResource(name: String): InputStream {
         val path: Path = Paths.get("src", "test", "resources", name)
         return Files.newInputStream(path)
+    }
+
+    @JvmStatic
+    @Throws(IOException::class)
+    fun readResourceFile(name: String): File {
+        val path: Path = Paths.get("src", "test", "resources", name)
+        return path.toFile()
     }
 }
 

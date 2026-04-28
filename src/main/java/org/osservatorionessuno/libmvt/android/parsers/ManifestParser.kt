@@ -21,17 +21,18 @@ class ManifestParser {
         val packageName: String,
         val versionCode: String,
         val versionName: String,
+        val manifest: Document,
     )
 
     companion object {
-        private const val ANDROID_NS = "http://schemas.android.com/apk/res/android"
+        const val ANDROID_NS = "http://schemas.android.com/apk/res/android"
     }
 
     /**
      *Function to extract the manifest information from an XML Document.
      */
     private fun manifestInfoFromDocument(document: Document): ManifestInfo {
-        val el = document.documentElement ?: return ManifestInfo("", "", "")
+        val el = document.documentElement ?: return ManifestInfo("", "", "", document)
         val packageName = el.getAttribute("package")
         val versionCode =
             el.getAttributeNS(ANDROID_NS, "versionCode").ifEmpty {
@@ -45,6 +46,7 @@ class ManifestParser {
             packageName = packageName,
             versionCode = versionCode,
             versionName = versionName,
+            manifest = document,
         )
     }
 

@@ -9,6 +9,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.io.IOException;
@@ -32,7 +33,12 @@ public class Packages extends AndroidArtifact {
         Integer uid = null;
         Boolean system = false;
         Boolean thirdParty = false;
-        List<Map<String, String>> files = new ArrayList<>();
+        List<Map<String, Object>> files = new ArrayList<>();
+
+        @Override
+        public String toString() {
+            return "PackageResult(name=" + name + ", disabled=" + disabled + ", installer=" + installer + ", uid=" + uid + ", system=" + system + ", thirdParty=" + thirdParty + ", files=" + files + ")";
+        }
     }
 
     @Override
@@ -54,19 +60,49 @@ public class Packages extends AndroidArtifact {
                 JSONArray filesArray = obj.getJSONArray("files");
                 for (int j = 0; j < filesArray.length(); j++) {
                     JSONObject fileObj = filesArray.getJSONObject(j);
-                    result.files.add(
-                        Map.of(
-                            "path", fileObj.getString("path"),
-                            "local_name", fileObj.getString("local_name"),
-                            "md5", fileObj.getString("md5"),
-                            "sha1", fileObj.getString("sha1"),
-                            "sha256", fileObj.getString("sha256"),
-                            "sha512", fileObj.getString("sha512"),
-                            "certificate_md5", fileObj.getJSONObject("certificate").getString("Md5"),
-                            "certificate_sha1", fileObj.getJSONObject("certificate").getString("Sha1"),
-                            "certificate_sha256", fileObj.getJSONObject("certificate").getString("Sha256")
-                        )
-                    );
+                    List<Map<String, String>> certs = new ArrayList<>();
+
+                    // AndroidQF format: { "certificate": { "Md5": "...", "Sha1": "...", "Sha256": "..." } }
+                    JSONObject certificateInfo = fileObj.optJSONObject("certificate");
+                    if (certificateInfo != null) {
+                        String md5 = certificateInfo.optString("Md5", null);
+                        String sha1 = certificateInfo.optString("Sha1", null);
+                        String sha256 = certificateInfo.optString("Sha256", null);
+
+                        Map<String, String> certMap = new HashMap<>();
+                        if (md5 != null) certMap.put("md5", md5);
+                        if (sha1 != null) certMap.put("sha1", sha1);
+                        if (sha256 != null) certMap.put("sha256", sha256);
+                        if (!certMap.isEmpty()) certs.add(certMap);
+                    }
+
+                    // Bugbane format: { "certificates": [ { "md5": "...", "sha1": "...", "sha256": "..." }, ... ] }
+                    JSONArray certificates = fileObj.optJSONArray("certificates");
+                    if (certificates != null) {
+                        for (int k = 0; k < certificates.length(); k++) {
+                            JSONObject cert = certificates.optJSONObject(k);
+                            if (cert == null) continue;
+                            Map<String, String> certMap = new HashMap<>();
+                            String md5 = cert.optString("md5", null);
+                            String sha1 = cert.optString("sha1", null);
+                            String sha256 = cert.optString("sha256", null);
+                            if (md5 != null) certMap.put("md5", md5);
+                            if (sha1 != null) certMap.put("sha1", sha1);
+                            if (sha256 != null) certMap.put("sha256", sha256);
+                            if (!certMap.isEmpty()) certs.add(certMap);
+                        }
+                    }
+
+                    Map<String, Object> fileMap = new HashMap<>();
+                    fileMap.put("path", fileObj.optString("path", ""));
+                    fileMap.put("local_name", fileObj.optString("local_name", ""));
+                    fileMap.put("md5", fileObj.optString("md5", ""));
+                    fileMap.put("sha1", fileObj.optString("sha1", ""));
+                    fileMap.put("sha256", fileObj.optString("sha256", ""));
+                    fileMap.put("sha512", fileObj.optString("sha512", ""));
+                    fileMap.put("certificates", certs);
+
+                    result.files.add(fileMap);
                 }
                 results.add(result);
             }
@@ -128,15 +164,30 @@ public class Packages extends AndroidArtifact {
                     )));
             }
 
-            if (indicators == null) return;
+            // Continnue instead of returning because we want to check indicators for all packages.
+            if (indicators == null) continue;
 
             detected.addAll(indicators.matchString(result.name, IndicatorType.APP_ID));
+            for (Map<String, Object> packageFile : result.files) {
+                detected.addAll(indicators.matchString((String) packageFile.get("path"), IndicatorType.FILE_PATH));
+                detected.addAll(indicators.matchString((String) packageFile.get("md5"), IndicatorType.FILE_HASH_MD5));
+                detected.addAll(indicators.matchString((String) packageFile.get("sha1"), IndicatorType.FILE_HASH_SHA1));
+                detected.addAll(indicators.matchString((String) packageFile.get("sha256"), IndicatorType.FILE_HASH_SHA256));
 
-            for (Map<String, String> packageFile : result.files) {
-                detected.addAll(indicators.matchString(packageFile.get("path"), IndicatorType.FILE_PATH));
-                detected.addAll(indicators.matchString(packageFile.get("sha256"), IndicatorType.FILE_HASH_SHA256));
+                Object certificatesObj = packageFile.get("certificates");
+                if (!(certificatesObj instanceof List<?> certList)) continue;
 
-                // TODO: Implement certificate checks
+                for (Object certObj : certList) {
+                    if (!(certObj instanceof Map<?, ?> certAny)) continue;
+
+                    Object md5Obj = certAny.get("md5");
+                    Object sha1Obj = certAny.get("sha1");
+                    Object sha256Obj = certAny.get("sha256");
+
+                    detected.addAll(indicators.matchString(md5Obj instanceof String ? (String) md5Obj : null, IndicatorType.APP_CERT_HASH_MD5));
+                    detected.addAll(indicators.matchString(sha1Obj instanceof String ? (String) sha1Obj : null, IndicatorType.APP_CERT_HASH_SHA1));
+                    detected.addAll(indicators.matchString(sha256Obj instanceof String ? (String) sha256Obj : null, IndicatorType.APP_CERT_HASH_SHA256));
+                }
             }
         }
     }
