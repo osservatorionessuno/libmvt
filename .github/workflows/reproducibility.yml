@@ -1,0 +1,71 @@
+name: Reproducibility check
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  reproducibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17.0.19'
+          cache: gradle
+
+      - name: Build locally
+        run: ./gradlew --no-daemon clean jar
+
+      - name: Hash local jar
+        id: local
+        run: |
+          set -euo pipefail
+          jar=$(ls build/libs/libmvt-*.jar)
+          hash=$(sha256sum "$jar" | awk '{print $1}')
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"
+          echo "Local:   $hash  $jar"
+
+      - name: Fetch JitPack build for this commit
+        id: jitpack
+        run: |
+          set -euo pipefail
+          short=$(git rev-parse --short=10 HEAD)
+          url="https://jitpack.io/com/github/osservatorionessuno/libmvt/${short}/libmvt-${short}.jar"
+          log="https://jitpack.io/com/github/osservatorionessuno/libmvt/${short}/build.log"
+          echo "URL: $url"
+          # First GET triggers the build; JitPack blocks until done or fails.
+          # Poll up to ~15 min for slow builds.
+          code=000
+          for i in $(seq 1 90); do
+            code=$(curl -sIL -o /dev/null -w '%{http_code}' "$url" --max-time 30 || echo 000)
+            echo "Attempt $i: HTTP $code"
+            [ "$code" = "200" ] && break
+            sleep 10
+          done
+          if [ "$code" != "200" ]; then
+            echo "::error::JitPack did not produce an artifact (last HTTP $code)"
+            echo "--- build.log (tail) ---"
+            curl -sL "$log" | tail -200 || true
+            exit 1
+          fi
+          curl -sL -o "jitpack-${short}.jar" "$url"
+          hash=$(sha256sum "jitpack-${short}.jar" | awk '{print $1}')
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"
+          echo "JitPack: $hash  jitpack-${short}.jar"
+
+      - name: Compare hashes
+        run: |
+          set -euo pipefail
+          local_hash='${{ steps.local.outputs.hash }}'
+          jitpack_hash='${{ steps.jitpack.outputs.hash }}'
+          echo "Local:   $local_hash"
+          echo "JitPack: $jitpack_hash"
+          if [ "$local_hash" != "$jitpack_hash" ]; then
+            echo "::error::SHA-256 mismatch — local build does not match JitPack output"
+            exit 1
+          fi
+          echo "::notice::Reproducible build verified: $local_hash"
