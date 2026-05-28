@@ -1,5 +1,5 @@
 plugins {
-    kotlin("jvm") version "2.0.0"
+    alias(libs.plugins.kotlin.jvm)
     application
 }
 
@@ -16,14 +16,14 @@ repositories {
 
 dependencies {
     // https://github.com/rednaga/axmlprinter — JitPack: v1.0.0 ok; v2.0.0 tag currently fails to build there
-    implementation("com.github.rednaga:axmlprinter:v1.0.0")
+    implementation(libs.axmlprinter)
     // https://android.googlesource.com/platform/tools/apksig/ (published as com.android.tools.build:apksig)
-    implementation("com.android.tools.build:apksig:8.13.2")
-    implementation("org.json:json:20240303")
-    implementation("org.ahocorasick:ahocorasick:0.6.3")
-    implementation("org.yaml:snakeyaml:2.2")
-    implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.6")
-    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    implementation(libs.apksig)
+    implementation(libs.org.json)
+    implementation(libs.ahocorasick)
+    implementation(libs.snakeyaml)
+    implementation(libs.kotlinx.cli)
+    testImplementation(libs.junit.jupiter)
 }
 
 application {
