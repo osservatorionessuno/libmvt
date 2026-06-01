@@ -1,5 +1,6 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
+import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 import org.osservatorionessuno.libmvt.common.Detection;
@@ -17,13 +18,12 @@ public class DumpsysReceivers extends AndroidArtifact {
     }
 
     @Override
-    public void parse(InputStream input) throws IOException {
+    public void parse(AbstractInput artifactInput) throws IOException {
         results.clear();
-        if (input == null) return;
         boolean inTable = false;
         boolean inNonData = false;
         String currentIntent = null;
-        for (String line : collectLines(input)) {
+        for (String line : collectLines(artifactInput.inputStream)) {
             if (line.startsWith("Receiver Resolver Table:")) { inTable = true; continue; }
             if (!inTable) continue;
             if (line.startsWith("  Non-Data Actions:")) { inNonData = true; continue; }

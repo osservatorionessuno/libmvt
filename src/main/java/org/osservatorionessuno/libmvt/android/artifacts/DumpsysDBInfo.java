@@ -1,5 +1,6 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
+import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 
 import java.util.*;
@@ -19,11 +20,11 @@ public class DumpsysDBInfo extends AndroidArtifact {
     }
 
     @Override
-    public void parse(InputStream input) throws IOException {
+    public void parse(AbstractInput artifactInput) throws IOException {
         results.clear();
         String pool = null;
         boolean inOperations = false;
-        for (String line : collectLines(input)) {
+        for (String line : collectLines(artifactInput.inputStream)) {
             if (line.startsWith("Connection pool for ")) {
                 pool = line.replace("Connection pool for ", "").replaceFirst(":$", "");
             }

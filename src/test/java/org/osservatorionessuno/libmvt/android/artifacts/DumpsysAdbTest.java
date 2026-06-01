@@ -1,6 +1,7 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.junit.jupiter.api.Test;
+import org.osservatorionessuno.libmvt.common.AbstractInput;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
@@ -27,7 +28,7 @@ public class DumpsysAdbTest {
     public void testParsing() throws Exception {
         DumpsysAdb da = new DumpsysAdb();
         String data = readResource("android_data/dumpsys_adb.txt");
-        da.parse(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)));
+        da.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
         assertEquals(1, da.getResults().size());
         @SuppressWarnings("unchecked")
         Map<String, Object> result = (Map<String, Object>) da.getResults().get(0);
@@ -43,7 +44,7 @@ public class DumpsysAdbTest {
     public void testParsingXml() throws Exception {
         DumpsysAdb da = new DumpsysAdb();
         String data = readResource("android_data/dumpsys_adb_xml.txt");
-        da.parse(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)));
+        da.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
         assertEquals(1, da.getResults().size());
         @SuppressWarnings("unchecked")
         Map<String, Object> result = (Map<String, Object>) da.getResults().get(0);

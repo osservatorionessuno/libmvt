@@ -1,6 +1,7 @@
 package org.osservatorionessuno.libmvt.android
 
 import org.osservatorionessuno.libmvt.android.artifacts.*
+import org.osservatorionessuno.libmvt.common.AbstractInput
 import org.osservatorionessuno.libmvt.common.Artifact
 import org.osservatorionessuno.libmvt.common.Indicators
 import org.osservatorionessuno.libmvt.common.StringResolver
@@ -11,6 +12,11 @@ import java.io.IOException
 import java.nio.charset.Charset
 import java.util.LinkedHashMap
 import java.util.zip.ZipFile
+
+class ArtifactInput(
+    path: String,
+    inputStream: InputStream,
+) : AbstractInput(path, inputStream)
 
 /**
  * Simple helper to run the available AndroidQF artifact parsers on a folder
@@ -31,13 +37,14 @@ class ForensicRunner(private val stringResolver: StringResolver) {
      */
     @Throws(Exception::class)
     fun streamLegacyAnalysisFromDirectory(directory: File): Map<String, Artifact> {
+        LogUtils.d(TAG, "streamLegacyAnalysisFromDirectory: $directory")
         val map = LinkedHashMap<String, Artifact>()
         val files = directory.listFiles()
         if (files == null) return map
         for (file in files) {
             if (!file.isFile) continue;
 
-            val art = streamFileAnalysis(file.absolutePath, file.inputStream())
+            val art = streamFileAnalysis(ArtifactInput(file.absolutePath, file.inputStream()))
             if (art != null) {
                 map[file.name] = art
             }
@@ -48,13 +55,28 @@ class ForensicRunner(private val stringResolver: StringResolver) {
     /** This is a method to analyze a zip file. */
     @Throws(Exception::class)
     fun streamAnalysisFromZip(zip: File): Map<String, Artifact> {
+        LogUtils.d(TAG, "streamAnalysisFromZip: $zip")
         val map = LinkedHashMap<String, Artifact>()
         val zipFile = ZipFile(zip)
         val entries = zipFile.entries()
         for (entry in entries) {
-            val art = streamFileAnalysis(entry.name, zipFile.getInputStream(entry))
+            val art = streamFileAnalysis(ArtifactInput(entry.name, zipFile.getInputStream(entry)))
             if (art != null) {
                 map[entry.name] = art
+            }
+        }
+        return map
+    }
+
+    /** Analyze already-open artifact streams from an encrypted or custom container. */
+    @Throws(Exception::class)
+    fun streamAnalysis(entries: Sequence<AbstractInput>): Map<String, Artifact> {
+        LogUtils.d(TAG, "streamAnalysis: $entries")
+        val map = LinkedHashMap<String, Artifact>()
+        for (entry in entries) {
+            val art = streamFileAnalysis(entry)
+            if (art != null) {
+                map[entry.path] = art
             }
         }
         return map
@@ -72,22 +94,29 @@ class ForensicRunner(private val stringResolver: StringResolver) {
      * The method will log an error and return null if the file is not known.
      */
     @Throws(Exception::class)
-    fun streamFileAnalysis(path: String, content: InputStream): Artifact? {
-        content.use {
-            val fileName = path.split('/').last()
+    fun streamFileAnalysis(artifactInput: AbstractInput): Artifact? {
+        LogUtils.d(TAG, "streamFileAnalysis: ${artifactInput.path}")
+        artifactInput.inputStream.use {
+            val fileName = artifactInput.path.split('/').last()
             if (fileName in SKIP_FILES) {
                 LogUtils.d(TAG, "Skipping file: $fileName")
+                return null
+            }
+
+            // Some folders are not relevant for the analysis
+            if (artifactInput.path.startsWith("tmp/")) {
+                LogUtils.d(TAG, "Skipping temporary file: ${artifactInput.path}")
                 return null
             }
 
             val index = MODULES_MAP[fileName]
             if (index == null) {
                 // TODO: convert to debug log once in production
-                LogUtils.w(TAG, "Unknown file: $fileName")
+                LogUtils.w(TAG, "Unknown file: ${artifactInput.path}")
                 return null
             }
             val art = MODULES_LIST[index]
-            art.parse(it)
+            art.parse(artifactInput)
             return finalizeArtifact(art)
         }
     }
@@ -95,6 +124,7 @@ class ForensicRunner(private val stringResolver: StringResolver) {
     private fun finalizeArtifact(art: AndroidArtifact): Artifact {
         art.stringResolver = stringResolver
         indicators?.let { ind: Indicators ->
+            ind.setStringResolver(stringResolver)
             art.indicators = ind
             art.checkIndicators()
         }

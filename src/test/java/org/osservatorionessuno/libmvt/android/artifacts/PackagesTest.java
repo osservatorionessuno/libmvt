@@ -2,6 +2,7 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
+import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.Indicators;
 import org.osservatorionessuno.libmvt.common.JvmMapStringResolver;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
@@ -22,7 +23,7 @@ public class PackagesTest {
         Packages p = new Packages();
         p.setStringResolver(new JvmMapStringResolver());
         try (InputStream data = ResourcesUtils.readResource("androidqf/packages.json")) {
-            p.parse(data);
+            p.parse(new AbstractInput("packages.json", data) {});
         }
         return p;
     }

@@ -1,9 +1,9 @@
 package org.osservatorionessuno.libmvt.android.artifacts
 
 import org.osservatorionessuno.libmvt.common.AlertLevel
+import org.osservatorionessuno.libmvt.common.AbstractInput
 import org.osservatorionessuno.libmvt.common.Detection
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType
-import java.io.InputStream
 
 /**
  * Parser for Android tombstone crash files.
@@ -14,11 +14,11 @@ class TombstoneCrashes : AndroidArtifact() {
 
     override fun paths(): List<String> = emptyList()
 
-    override fun parse(input: InputStream) {
+    override fun parse(artifactInput: AbstractInput) {
         results.clear()
 
         val rec = HashMap<String, Any?>()
-        for (raw in collectLines(input)) {
+        forEachLine(artifactInput.inputStream) { raw ->
             val line = raw.trim()
             when {
                 line.startsWith("Timestamp:") -> {
@@ -61,6 +61,7 @@ class TombstoneCrashes : AndroidArtifact() {
             }
         }
         if (rec.isNotEmpty()) results.add(rec)
+
     }
 
     /**

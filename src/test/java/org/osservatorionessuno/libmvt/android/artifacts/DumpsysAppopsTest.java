@@ -1,6 +1,7 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.junit.jupiter.api.Test;
+import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.Indicators;
 
 import java.io.BufferedReader;
@@ -29,7 +30,7 @@ public class DumpsysAppopsTest {
     public void testParsing() throws Exception {
         DumpsysAppops da = new DumpsysAppops();
         String data = readResource("android_data/dumpsys_appops.txt");
-        da.parse(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)));
+        da.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
         assertEquals(13, da.getResults().size());
 
         @SuppressWarnings("unchecked")
@@ -60,7 +61,7 @@ public class DumpsysAppopsTest {
     public void testIocCheck() throws Exception {
         DumpsysAppops da = new DumpsysAppops();
         String data = readResource("android_data/dumpsys_appops.txt");
-        da.parse(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)));
+        da.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
 
         Indicators indicators = new Indicators();
         indicators.loadFromDirectory(

@@ -2,6 +2,7 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
+import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.Indicators;
 
 import java.io.ByteArrayInputStream;
@@ -18,7 +19,7 @@ public class ProcessesTest {
     public void testParsing() throws Exception {
         Processes p = new Processes();
         InputStream data = ResourcesUtils.readResource("android_data/ps.txt");
-        p.parse(data);
+        p.parse(new AbstractInput("ps.txt", data) {});
         assertEquals(17, p.getResults().size());
 
         @SuppressWarnings("unchecked")
@@ -30,7 +31,7 @@ public class ProcessesTest {
     public void testIocCheck() throws Exception {
         Processes p = new Processes();
         InputStream data = ResourcesUtils.readResource("android_data/ps.txt");
-        p.parse(data);
+        p.parse(new AbstractInput("ps.txt", data) {});
 
         Indicators indicators = new Indicators();
         indicators.loadFromDirectory(
@@ -47,7 +48,7 @@ public class ProcessesTest {
         Processes p = new Processes();
         String data = "USER PID PPID VSZ RSS WCHAN ADDR S NAME\n" +
                 "root 50 2 0 0 0 0 S com.bad.actor.ma\n";
-        p.parse(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)));
+        p.parse(new AbstractInput("ps.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
 
         Indicators indicators = new Indicators();
         indicators.loadFromDirectory(

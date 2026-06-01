@@ -1,5 +1,6 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
+import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 
 import java.math.BigInteger;
@@ -21,9 +22,9 @@ public class Processes extends AndroidArtifact {
     }
 
     @Override
-    public void parse(InputStream input) throws IOException {
+    public void parse(AbstractInput artifactInput) throws IOException {
         results.clear();
-        for (String line : collectLines(input)) {
+        for (String line : collectLines(artifactInput.inputStream)) {
             if (line.startsWith("USER")) continue; // Skip header line
             line = line.trim();
             if (line.isEmpty()) continue;

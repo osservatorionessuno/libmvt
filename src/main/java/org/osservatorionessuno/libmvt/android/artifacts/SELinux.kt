@@ -1,8 +1,8 @@
 package org.osservatorionessuno.libmvt.android.artifacts
 
 import org.osservatorionessuno.libmvt.common.AlertLevel
+import org.osservatorionessuno.libmvt.common.AbstractInput
 import org.osservatorionessuno.libmvt.common.Detection
-import java.io.InputStream
 
 /** Parser for SELinux status files. */
 class SELinux : AndroidArtifact() {
@@ -10,14 +10,12 @@ class SELinux : AndroidArtifact() {
         return listOf("selinux.txt")
     }
 
-    override fun parse(input: InputStream) {
+    override fun parse(artifactInput: AbstractInput) {
         results.clear()
-        if (input != null) {
-            val status = collectText(input).trim().lowercase()
-            val map = mutableMapOf<String, String>()
-            map["status"] = status
-            results.add(map)
-        }
+        val status = collectText(artifactInput.inputStream).trim().lowercase()
+        val map = mutableMapOf<String, String>()
+        map["status"] = status
+        results.add(map)
     }
 
     override fun checkIndicators() {
