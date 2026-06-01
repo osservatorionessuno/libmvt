@@ -26,4 +26,11 @@ abstract class AndroidArtifact : Artifact() {
     protected fun collectLines(content: InputStream): List<String> {
         return content.bufferedReader(Charsets.UTF_8).useLines { it.toList() }
     }
+
+    @Throws(IOException::class)
+    protected fun forEachLine(content: InputStream, block: (String) -> Unit) {
+        content.bufferedReader(Charsets.UTF_8).useLines { lines ->
+            lines.forEach(block)
+        }
+    }
 }

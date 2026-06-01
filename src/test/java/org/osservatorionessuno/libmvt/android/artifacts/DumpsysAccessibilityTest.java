@@ -2,6 +2,7 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
+import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.Indicators;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 
@@ -27,7 +28,7 @@ public class DumpsysAccessibilityTest {
     public void testParsing() throws Exception {
         DumpsysAccessibility da = new DumpsysAccessibility();
         InputStream data = ResourcesUtils.readResource("android_data/dumpsys_accessibility.txt");
-        da.parse(data);
+        da.parse(new AbstractInput("dumpsys.txt", data) {});
         assertEquals(4, da.getResults().size());
         @SuppressWarnings("unchecked")
         Map<String, String> first = (Map<String, String>) da.getResults().get(0);
@@ -42,7 +43,7 @@ public class DumpsysAccessibilityTest {
     public void testParsingV14Format() throws Exception {
         DumpsysAccessibility da = new DumpsysAccessibility();
         InputStream data = ResourcesUtils.readResource("android_data/dumpsys_accessibility_v14_or_later.txt");
-        da.parse(data);
+        da.parse(new AbstractInput("dumpsys.txt", data) {});
         assertEquals(1, da.getResults().size());
         @SuppressWarnings("unchecked")
         Map<String, String> first = (Map<String, String>) da.getResults().get(0);
@@ -54,7 +55,7 @@ public class DumpsysAccessibilityTest {
     public void testIocCheck() throws Exception {
         DumpsysAccessibility da = new DumpsysAccessibility();
         InputStream data = ResourcesUtils.readResource("android_data/dumpsys_accessibility.txt");
-        da.parse(data);
+        da.parse(new AbstractInput("dumpsys.txt", data) {});
 
         File tempDir = new File(System.getProperty("java.io.tmpdir"),
                 "libmvt-test-iocs-" + System.currentTimeMillis());

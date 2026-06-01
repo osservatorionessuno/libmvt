@@ -1,6 +1,7 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.junit.jupiter.api.Test;
+import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.Indicators;
 
 import java.io.BufferedReader;
@@ -26,7 +27,7 @@ public class DumpsysBatteryDailyTest {
     public void testParsing() throws Exception {
         DumpsysBatteryDaily bd = new DumpsysBatteryDaily();
         String data = readResource("android_data/dumpsys_battery.txt");
-        bd.parse(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)));
+        bd.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
         assertEquals(3, bd.getResults().size());
     }
 
@@ -34,7 +35,7 @@ public class DumpsysBatteryDailyTest {
     public void testIocCheck() throws Exception {
         DumpsysBatteryDaily bd = new DumpsysBatteryDaily();
         String data = readResource("android_data/dumpsys_battery.txt");
-        bd.parse(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)));
+        bd.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
 
         Indicators ind = new Indicators();
         ind.loadFromDirectory(

@@ -1,5 +1,6 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
+import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 
 import java.util.*;
@@ -15,10 +16,10 @@ public class DumpsysPlatformCompat extends AndroidArtifact {
     }
 
     @Override
-    public void parse(InputStream input) throws IOException {
+    public void parse(AbstractInput artifactInput) throws IOException {
         results.clear();
-        if (input == null) return;
-        for (String line : collectLines(input)) {
+        if (artifactInput.inputStream == null) return;
+        for (String line : collectLines(artifactInput.inputStream)) {
             line = line.trim();
             if (!line.startsWith("ChangeId(168419799; name=DOWNSCALED")) continue;
             int idx = line.indexOf("rawOverrides={");

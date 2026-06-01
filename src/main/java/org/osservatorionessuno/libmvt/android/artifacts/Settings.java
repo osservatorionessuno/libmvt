@@ -1,5 +1,6 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
+import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.Detection;
 
@@ -42,17 +43,16 @@ public class Settings extends AndroidArtifact {
     }
 
     @Override
-    public void parse(InputStream input) throws IOException {
+    public void parse(AbstractInput artifactInput) throws IOException {
         results.clear();
         Map<String, String> map = new HashMap<>();
-        if (input != null) {
-            for (String line : collectLines(input)) {
-                line = line.trim();
-                if (line.isEmpty() || !line.contains("=")) continue;
-                String[] parts = line.split("=", 2);
-                map.put(parts[0], parts.length > 1 ? parts[1] : "");
-            }
+        for (String line : collectLines(artifactInput.inputStream)) {
+            line = line.trim();
+            if (line.isEmpty() || !line.contains("=")) continue;
+            String[] parts = line.split("=", 2);
+            map.put(parts[0], parts.length > 1 ? parts[1] : "");
         }
+        
         results.add(map);
     }
 

@@ -2,6 +2,7 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
+import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.Indicators;
 
 import java.io.InputStream;
@@ -16,7 +17,7 @@ public class DumpsysPackageActivitiesTest {
     public void testParsing() throws Exception {
         DumpsysPackageActivities dpa = new DumpsysPackageActivities();
         InputStream data = ResourcesUtils.readResource("android_data/dumpsys_packages.txt");
-        dpa.parse(data);
+        dpa.parse(new AbstractInput("dumpsys.txt", data) {});
         assertEquals(4, dpa.getResults().size());
 
         @SuppressWarnings("unchecked")
@@ -29,7 +30,7 @@ public class DumpsysPackageActivitiesTest {
     public void testIocCheck() throws Exception {
         DumpsysPackageActivities dpa = new DumpsysPackageActivities();
         InputStream data = ResourcesUtils.readResource("android_data/dumpsys_packages.txt");
-        dpa.parse(data);
+        dpa.parse(new AbstractInput("dumpsys.txt", data) {});
 
         Indicators ind = new Indicators();
         ind.loadFromDirectory(

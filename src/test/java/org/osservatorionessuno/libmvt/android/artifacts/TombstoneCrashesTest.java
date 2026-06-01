@@ -3,6 +3,7 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
+import org.osservatorionessuno.libmvt.common.AbstractInput;
 
 import java.io.InputStream;
 import java.nio.file.Paths;
@@ -18,7 +19,7 @@ public class TombstoneCrashesTest {
     public void testParsing() throws Exception {
         TombstoneCrashes tc = new TombstoneCrashes();
         InputStream data = ResourcesUtils.readResource("android_data/tombstone_process.txt");
-        tc.parse(data);
+        tc.parse(new AbstractInput("dummy", data) {});
 
         System.out.printf("Parsed text tombstone, results: %d%n", tc.getResults().size());
         for (Object r : tc.getResults()) {

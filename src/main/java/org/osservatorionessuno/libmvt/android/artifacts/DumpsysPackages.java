@@ -1,5 +1,6 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
+import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 import org.osservatorionessuno.libmvt.common.Utils;
@@ -160,11 +161,11 @@ public class DumpsysPackages extends AndroidArtifact {
     }
 
     @Override
-    public void parse(InputStream input) throws IOException {
+    public void parse(AbstractInput artifactInput) throws IOException {
         results.clear();
         boolean inPackageList = false;
         List<String> packageLines = new ArrayList<>();
-        for (String line : collectLines(input)) {
+        for (String line : collectLines(artifactInput.inputStream)) {
             if (line.startsWith("Packages:")) { inPackageList = true; continue; }
             if (!inPackageList) continue;
             if (line.trim().isEmpty()) break;

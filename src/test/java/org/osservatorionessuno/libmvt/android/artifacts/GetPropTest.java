@@ -2,6 +2,7 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
+import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.Indicators;
 
 import java.io.InputStream;
@@ -16,7 +17,7 @@ public class GetPropTest {
     public void testParsing() throws Exception {
         GetProp gp = new GetProp();
         InputStream data = ResourcesUtils.readResource("android_data/getprop.txt");
-        gp.parse(data);
+        gp.parse(new AbstractInput("getprop.txt", data) {});
         assertEquals(13, gp.getResults().size());
 
         @SuppressWarnings("unchecked")
@@ -29,7 +30,7 @@ public class GetPropTest {
     public void testIocCheck() throws Exception {
         GetProp gp = new GetProp();
         InputStream data = ResourcesUtils.readResource("android_data/getprop.txt");
-        gp.parse(data);
+        gp.parse(new AbstractInput("getprop.txt", data) {});
 
         Indicators indicators = new Indicators();
         indicators.loadFromDirectory(

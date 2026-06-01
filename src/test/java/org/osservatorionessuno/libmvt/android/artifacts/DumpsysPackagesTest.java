@@ -1,6 +1,7 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.junit.jupiter.api.Test;
+import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.Indicators;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 
@@ -35,7 +36,7 @@ public class DumpsysPackagesTest {
     public void testParsing() throws Exception {
         DumpsysPackages dpa = new DumpsysPackages();
         String data = readResource("android_data/dumpsys_packages.txt");
-        dpa.parse(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)));
+        dpa.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
         assertEquals(2, dpa.getResults().size());
 
         @SuppressWarnings("unchecked")
@@ -48,7 +49,7 @@ public class DumpsysPackagesTest {
     public void testIocCheck() throws Exception {
         DumpsysPackages dpa = new DumpsysPackages();
         String data = readResource("android_data/dumpsys_packages.txt");
-        dpa.parse(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)));
+        dpa.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
 
         Indicators indicators = new Indicators();
         indicators.loadFromDirectory(
@@ -64,7 +65,7 @@ public class DumpsysPackagesTest {
     public void testRootPackageDetection() throws Exception {
         DumpsysPackages dpa = new DumpsysPackages();
         String sample = "Packages:\n  Package [com.topjohnwu.magisk] (test)\n    userId=0\n";
-        dpa.parse(new ByteArrayInputStream(sample.getBytes(StandardCharsets.UTF_8)));
+        dpa.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(sample.getBytes(StandardCharsets.UTF_8))) {});
         dpa.checkIndicators();
         assertFalse(dpa.detected.isEmpty());
     }

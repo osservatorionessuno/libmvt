@@ -1,5 +1,6 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
+import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.Detection;
 
@@ -20,10 +21,10 @@ public class DumpsysAdb extends AndroidArtifact {
     }
 
     @Override
-    public void parse(InputStream input) throws Exception {
-        String content = collectText(input);
+    public void parse(AbstractInput artifactInput) throws Exception {
+        String content = collectText(artifactInput.inputStream);
         results.clear();
-        if (input == null || content.contains("Can't find service: adb")) return;
+        if (content.contains("Can't find service: adb")) return;
         Map<String, Object> res = new HashMap<>();
         String[] lines = content.split("\n"); // use collectLines
         for (int i = 0; i < lines.length; i++) {
@@ -135,6 +136,7 @@ public class DumpsysAdb extends AndroidArtifact {
         String fingerprint = "";
         try {
             byte[] raw = Base64.getDecoder().decode(keyBase64);
+            // nosemgrep: java.lang.security.audit.crypto.use-of-md5.use-of-md5 - ADB fingerprints are legacy MD5 identifiers, not signatures.
             MessageDigest md = MessageDigest.getInstance("MD5");
             byte[] digest = md.digest(raw);
             StringBuilder hex = new StringBuilder();

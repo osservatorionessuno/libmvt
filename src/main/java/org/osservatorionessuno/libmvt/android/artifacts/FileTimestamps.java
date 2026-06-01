@@ -1,5 +1,7 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
+import org.osservatorionessuno.libmvt.common.AbstractInput;
+
 import java.util.*;
 import java.io.IOException;
 import java.io.InputStream;
@@ -14,7 +16,7 @@ public class FileTimestamps extends AndroidArtifact {
     }
 
     @Override
-    public void parse(InputStream input) throws IOException {
+    public void parse(AbstractInput artifactInput) throws IOException {
         // No parsing implemented; timestamps are expected as structured records.
     }
 

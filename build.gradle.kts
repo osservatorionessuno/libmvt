@@ -23,6 +23,7 @@ dependencies {
     implementation(libs.ahocorasick)
     implementation(libs.snakeyaml)
     implementation(libs.kotlinx.cli)
+    implementation(libs.protobuf.javalite)
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
 }

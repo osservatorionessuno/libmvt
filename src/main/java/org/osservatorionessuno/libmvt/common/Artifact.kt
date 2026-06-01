@@ -1,7 +1,5 @@
 package org.osservatorionessuno.libmvt.common
 
-import java.io.InputStream
-
 abstract class Artifact {
 
     @JvmField
@@ -14,7 +12,7 @@ abstract class Artifact {
     var indicators: Indicators? = null
 
     @Throws(Exception::class)
-    abstract fun parse(input: InputStream)
+    abstract fun parse(artifactInput: AbstractInput)
 
     abstract fun checkIndicators()
 
