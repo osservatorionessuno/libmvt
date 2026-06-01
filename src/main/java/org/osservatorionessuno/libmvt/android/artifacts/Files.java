@@ -1,6 +1,8 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
+import com.google.protobuf.CodedInputStream;
 import org.json.JSONException;
+import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.Detection;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
@@ -11,6 +13,7 @@ import java.util.Map;
 import java.util.Iterator;
 import java.util.Objects;
 import java.util.Set;
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import org.json.JSONArray;
@@ -26,11 +29,48 @@ public class Files extends AndroidArtifact {
 
     @Override
     public List<String> paths() {
-        return List.of("files.json");
+        return List.of("files.pb", "files.json");
     }
 
     @Override
-    public void parse(InputStream input) throws IOException {
+    public void parse(AbstractInput artifactInput) throws IOException {
+        if (artifactInput.path.endsWith(".pb")) {
+            parseProtobuf(artifactInput.inputStream);
+            return;
+        } else if (artifactInput.path.endsWith(".json")) {
+            parseJson(artifactInput.inputStream);
+            return;
+        }
+        throw new IOException("Unsupported file type: " + artifactInput.path);
+    }
+
+    private void parseProtobuf(InputStream input) throws IOException {
+        byte[] record;
+        while ((record = ProtobufRecords.readDelimited(input)) != null) {
+            CodedInputStream codedInput = CodedInputStream.newInstance(record);
+            Map<String, Object> file = parseFileRecord(codedInput);
+            results.add(file);
+        }
+    }
+
+    private Map<String, Object> parseFileRecord(CodedInputStream input) throws IOException {
+        Map<String, Object> map = new HashMap<>();
+        int tag;
+        while ((tag = input.readTag()) != 0) {
+            switch (tag >>> 3) {
+                case 1 -> map.put("path", ProtobufRecords.readString(input));
+                case 2 -> map.put("mtime", input.readDouble());
+                case 3 -> map.put("mode", ProtobufRecords.readString(input));
+                case 4 -> map.put("size", input.readInt64());
+                case 5 -> map.put("user", ProtobufRecords.readString(input));
+                case 6 -> map.put("group", ProtobufRecords.readString(input));
+                default -> input.skipField(tag);
+            }
+        }
+        return map;
+    }
+
+    private void parseJson(InputStream input) throws IOException {
         try {
             // Try to parse the input as a JSON array
             JSONArray arr = new JSONArray(collectText(input));

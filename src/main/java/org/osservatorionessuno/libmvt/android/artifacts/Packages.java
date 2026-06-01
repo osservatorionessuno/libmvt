@@ -1,5 +1,7 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
+import com.google.protobuf.CodedInputStream;
+import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.Detection;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
@@ -12,6 +14,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -23,7 +26,7 @@ public class Packages extends AndroidArtifact {
 
     @Override
     public List<String> paths() {
-        return List.of("packages.json");
+        return List.of("packages.pb", "packages.json");
     }
 
     private static class PackageResult {
@@ -42,7 +45,96 @@ public class Packages extends AndroidArtifact {
     }
 
     @Override
-    public void parse(InputStream input) throws IOException {
+    public void parse(AbstractInput artifactInput) throws IOException {
+        if (artifactInput.path.endsWith(".pb")) {
+            parseProtobuf(artifactInput.inputStream);
+            return;
+        } else if (artifactInput.path.endsWith(".json")) {
+            parseJson(artifactInput.inputStream);
+            return;
+        }
+        throw new IOException("Unsupported file type: " + artifactInput.path);
+    }
+
+    private void parseProtobuf(InputStream input) throws IOException {
+        byte[] record;
+        while ((record = ProtobufRecords.readDelimited(input)) != null) {
+            CodedInputStream codedInput = CodedInputStream.newInstance(record);
+            PackageResult result = parsePackageRecord(codedInput);
+            if (result != null) results.add(result);
+        }
+    }
+
+    private PackageResult parsePackageRecord(CodedInputStream input) throws IOException {
+        PackageResult result = new PackageResult();
+        int tag;
+        while ((tag = input.readTag()) != 0) {
+            switch (tag >>> 3) {
+                case 1 -> result.name = ProtobufRecords.readString(input);
+                case 2 -> result.installer = ProtobufRecords.readString(input);
+                case 3 -> result.uid = input.readInt32();
+                case 4 -> result.disabled = input.readBool();
+                case 5 -> result.system = input.readBool();
+                case 6 -> result.thirdParty = input.readBool();
+                case 7 -> result.files.add(parsePackageFileRecord(
+                    CodedInputStream.newInstance(ProtobufRecords.readLengthDelimitedField(input))
+                ));
+                default -> input.skipField(tag);
+            }
+        }
+        return result;
+    }
+
+    private Map<String, Object> parsePackageFileRecord(CodedInputStream input) throws IOException {
+        Map<String, Object> fileMap = new HashMap<>();
+        fileMap.put("certificates", new ArrayList<Map<String, String>>());
+        int tag;
+        while ((tag = input.readTag()) != 0) {
+            switch (tag >>> 3) {
+                case 1 -> fileMap.put("path", ProtobufRecords.readString(input));
+                case 2 -> fileMap.put("local_name", ProtobufRecords.readString(input));
+                case 3 -> fileMap.put("md5", ProtobufRecords.readString(input));
+                case 4 -> fileMap.put("sha1", ProtobufRecords.readString(input));
+                case 5 -> fileMap.put("sha256", ProtobufRecords.readString(input));
+                case 6 -> fileMap.put("sha512", ProtobufRecords.readString(input));
+                case 7 -> fileMap.put("suspicious", input.readBool());
+                case 8 -> fileMap.put("certificates", parsePackageCertificateRecord(
+                    CodedInputStream.newInstance(ProtobufRecords.readLengthDelimitedField(input))
+                ));
+                //case 9 -> fileMap.put("infiles", ProtobufRecords.readString(input));
+                default -> input.skipField(tag);
+            }
+        }
+        fileMap.putIfAbsent("path", "");
+        fileMap.putIfAbsent("local_name", "");
+        fileMap.putIfAbsent("md5", "");
+        fileMap.putIfAbsent("sha1", "");
+        fileMap.putIfAbsent("sha256", "");
+        fileMap.putIfAbsent("sha512", "");
+        return fileMap;
+    }
+
+    private Map<String, Object> parsePackageCertificateRecord(CodedInputStream input) throws IOException {
+        Map<String, Object> certificateMap = new HashMap<>();
+        int tag;
+        while ((tag = input.readTag()) != 0) {
+            switch (tag >>> 3) {
+                case 1 -> certificateMap.put("md5", ProtobufRecords.readString(input));
+                case 2 -> certificateMap.put("sha1", ProtobufRecords.readString(input));
+                case 3 -> certificateMap.put("sha256", ProtobufRecords.readString(input));
+                case 4 -> certificateMap.put("valid_from", ProtobufRecords.readString(input));
+                case 5 -> certificateMap.put("valid_to", ProtobufRecords.readString(input));
+                case 6 -> certificateMap.put("issuer", ProtobufRecords.readString(input));
+                case 7 -> certificateMap.put("subject", ProtobufRecords.readString(input));
+                case 8 -> certificateMap.put("signature_algorithm", ProtobufRecords.readString(input));
+                case 9 -> certificateMap.put("serial_number", ProtobufRecords.readString(input));
+                default -> input.skipField(tag);
+            }
+        }
+        return certificateMap;
+    }
+
+    private void parseJson(InputStream input) throws IOException {
         try {
             // Try to parse the input as a JSON array
             JSONArray arr = new JSONArray(collectText(input));

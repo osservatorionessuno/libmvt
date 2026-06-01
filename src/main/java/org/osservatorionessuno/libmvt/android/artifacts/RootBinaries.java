@@ -2,12 +2,13 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.json.JSONArray;
 import org.json.JSONException;
+import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.Detection;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 import org.osservatorionessuno.libmvt.common.Utils;
 import java.util.List;
-import java.util.Map;
+import java.io.BufferedInputStream;
 import java.io.InputStream;
 import java.io.IOException;
 
@@ -17,12 +18,30 @@ import java.io.IOException;
 public class RootBinaries extends AndroidArtifact {
     @Override
     public List<String> paths() {
-        return List.of("root_binaries.json");
+        return List.of("root_binaries.pb", "root_binaries.json");
     }
 
     @Override
-    public void parse(InputStream input) throws IOException, JSONException {
+    public void parse(AbstractInput artifactInput) throws IOException, JSONException {
         results.clear();
+        if (artifactInput.path.endsWith(".pb")) {
+            parseProtobuf(artifactInput.inputStream);
+            return;
+        } else if (artifactInput.path.endsWith(".json")) {
+            parseJson(artifactInput.inputStream);
+            return;
+        }
+        throw new IOException("Unsupported file type: " + artifactInput.path);
+    }
+
+    private void parseProtobuf(InputStream input) throws IOException {
+        byte[] record;
+        while ((record = ProtobufRecords.readDelimited(input)) != null) {
+            results.add(ProtobufRecords.readStringRecord(record));
+        }
+    }
+
+    private void parseJson(InputStream input) throws IOException, JSONException {
         String content = collectText(input);
         if (content == null || content.trim().isEmpty()) {
             return;

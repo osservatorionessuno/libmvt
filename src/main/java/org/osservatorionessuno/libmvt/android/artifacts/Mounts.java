@@ -1,5 +1,6 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
+import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.Detection;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
@@ -9,8 +10,8 @@ import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Set;
-import java.util.function.Predicate;
 import org.json.JSONArray;
+import java.io.BufferedInputStream;
 import java.io.InputStream;
 import java.io.IOException;
 
@@ -24,11 +25,30 @@ public class Mounts extends AndroidArtifact {
 
     @Override
     public List<String> paths() {
-        return List.of("mounts.json");
+        return List.of("mounts.pb", "mounts.json");
     }
 
     @Override
-    public void parse(InputStream input) throws IOException {
+    public void parse(AbstractInput artifactInput) throws IOException {
+        if (artifactInput.path.endsWith(".pb")) {
+            parseProtobuf(artifactInput.inputStream);
+            return;
+        } else if (artifactInput.path.endsWith(".json")) {
+            parseJson(artifactInput.inputStream);
+            return;
+        }
+        throw new IOException("Unsupported file type: " + artifactInput.path);
+    }
+
+    private void parseProtobuf(InputStream input) throws IOException {
+        byte[] record;
+        while ((record = ProtobufRecords.readDelimited(input)) != null) {
+            Map<String, Object> mount = parseMountEntry(ProtobufRecords.readStringRecord(record));
+            if (mount != null) results.add(mount);
+        }
+    }
+
+    private void parseJson(InputStream input) throws IOException {
         // Expect input as a JSON string representing an array of mount entry lines (not direct file lines).
         String content = collectText(input);
         if (content == null || content.trim().isEmpty()) {
@@ -37,74 +57,15 @@ public class Mounts extends AndroidArtifact {
         try {
             JSONArray entries = new JSONArray(content);
 
-            Predicate<String> isSuspicious = mnt -> {
-                return SUSPICIOUS_MOUNT_POINTS.contains(mnt) || 
-                       SUSPICIOUS_MOUNT_POINTS.stream().anyMatch(sp -> mnt.startsWith(sp));
-            };
-
             for (int idx = 0; idx < entries.length(); idx++) {
                 String entry = entries.getString(idx);
                 if (entry == null || entry.trim().isEmpty()) {
                     continue;
                 }
 
-                String device = null;
-                String mountPoint = null;
-                String filesystemType = null;
-                String mountOptions = "";
-
-                if (!entry.contains(" on ") || !entry.contains(" type ")) {
-                    // Skip lines that don't match the expected format
-                    continue;
-                }
-
-                try {
-                    String[] deviceSplit = entry.split(" on ", 2);
-                    device = deviceSplit[0].trim();
-                    String rest = deviceSplit[1];
-
-                    String[] mountAndFsSplit = rest.split(" type ", 2);
-                    mountPoint = mountAndFsSplit[0].trim();
-                    String fsPart = mountAndFsSplit[1];
-
-                    if (fsPart.contains("(") && fsPart.endsWith(")")) {
-                        int parenIdx = fsPart.indexOf('(');
-                        filesystemType = fsPart.substring(0, parenIdx).trim();
-                        mountOptions = fsPart.substring(parenIdx + 1, fsPart.length() - 1).trim();
-                    } else {
-                        filesystemType = fsPart.trim();
-                        mountOptions = "";
-                    }
-
-                    if (device.isEmpty() || mountPoint.isEmpty() || filesystemType.isEmpty()) {
-                        continue;
-                    }
-
-                    String[] optionsArray = mountOptions.isEmpty() ? new String[0] : mountOptions.split(",");
-                    List<String> optionsList = new ArrayList<>();
-                    for (String opt : optionsArray) {
-                        String trimmed = opt.trim();
-                        if (!trimmed.isEmpty()) {
-                            optionsList.add(trimmed);
-                        }
-                    }
-
-                    boolean isSystemPartition = isSuspicious.test(mountPoint);
-                    boolean isReadWrite = optionsList.contains("rw");
-
-                    Map<String,Object> mountEntry = new HashMap<>();
-                    mountEntry.put("device", device);
-                    mountEntry.put("mount_point", mountPoint);
-                    mountEntry.put("filesystem_type", filesystemType);
-                    mountEntry.put("mount_options", mountOptions);
-                    mountEntry.put("options_list", optionsList);
-                    mountEntry.put("is_system_partition", isSystemPartition);
-                    mountEntry.put("is_read_write", isReadWrite);
-
+                Map<String, Object> mountEntry = parseMountEntry(entry);
+                if (mountEntry != null) {
                     results.add(mountEntry);
-                } catch (Exception e) {
-                    // parsing failed, skip this line
-                    continue;
                 }
             }
         } catch (Exception ex) {
@@ -112,6 +73,72 @@ public class Mounts extends AndroidArtifact {
             return;
         }
         return;
+    }
+
+    private Map<String, Object> parseMountEntry(String entry) {
+        String device = null;
+        String mountPoint = null;
+        String filesystemType = null;
+        String mountOptions = "";
+
+        if (!entry.contains(" on ") || !entry.contains(" type ")) {
+            // Skip lines that don't match the expected format
+            return null;
+        }
+
+        try {
+            String[] deviceSplit = entry.split(" on ", 2);
+            device = deviceSplit[0].trim();
+            String rest = deviceSplit[1];
+
+            String[] mountAndFsSplit = rest.split(" type ", 2);
+            mountPoint = mountAndFsSplit[0].trim();
+            String fsPart = mountAndFsSplit[1];
+
+            if (fsPart.contains("(") && fsPart.endsWith(")")) {
+                int parenIdx = fsPart.indexOf('(');
+                filesystemType = fsPart.substring(0, parenIdx).trim();
+                mountOptions = fsPart.substring(parenIdx + 1, fsPart.length() - 1).trim();
+            } else {
+                filesystemType = fsPart.trim();
+                mountOptions = "";
+            }
+
+            if (device.isEmpty() || mountPoint.isEmpty() || filesystemType.isEmpty()) {
+                return null;
+            }
+
+            String[] optionsArray = mountOptions.isEmpty() ? new String[0] : mountOptions.split(",");
+            List<String> optionsList = new ArrayList<>();
+            for (String opt : optionsArray) {
+                String trimmed = opt.trim();
+                if (!trimmed.isEmpty()) {
+                    optionsList.add(trimmed);
+                }
+            }
+
+            boolean isSystemPartition = isSuspiciousMountPoint(mountPoint);
+            boolean isReadWrite = optionsList.contains("rw");
+
+            Map<String,Object> mountEntry = new HashMap<>();
+            mountEntry.put("device", device);
+            mountEntry.put("mount_point", mountPoint);
+            mountEntry.put("filesystem_type", filesystemType);
+            mountEntry.put("mount_options", mountOptions);
+            mountEntry.put("options_list", optionsList);
+            mountEntry.put("is_system_partition", isSystemPartition);
+            mountEntry.put("is_read_write", isReadWrite);
+
+            return mountEntry;
+        } catch (Exception e) {
+            // parsing failed, skip this line
+            return null;
+        }
+    }
+
+    private boolean isSuspiciousMountPoint(String mountPoint) {
+        return SUSPICIOUS_MOUNT_POINTS.contains(mountPoint)
+                || SUSPICIOUS_MOUNT_POINTS.stream().anyMatch(mountPoint::startsWith);
     }
 
     @Override
