@@ -24,6 +24,7 @@ dependencies {
     implementation(libs.snakeyaml)
     implementation(libs.kotlinx.cli)
     testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 application {

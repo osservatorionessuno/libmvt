@@ -35,7 +35,7 @@ jobs:
           gradle --version
 
       - name: Run unit tests (debug)
-        run: gradle --no-daemon testDebugUnitTest --stacktrace --info
+        run: gradle --no-daemon test --stacktrace --info
 
       - name: Upload unit test reports
         if: always()
@@ -43,5 +43,5 @@ jobs:
         with:
           name: unit-test-reports-${{ github.run_number }}
           path: |
-            **/build/reports/tests/testDebugUnitTest/**
-            **/build/test-results/testDebugUnitTest/**
+            **/build/reports/tests/test/**
+            **/build/test-results/test/**
