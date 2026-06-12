@@ -74,10 +74,20 @@ object Utils {
         "android.permission.RECEIVE_WAP_PUSH",
         "android.permission.RECORD_AUDIO",
         "android.permission.SEND_SMS",
-        "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.USE_CREDENTIALS",
         "android.permission.USE_SIP",
-        "com.android.browser.permission.READ_HISTORY_BOOKMARKS"
+        "com.android.browser.permission.READ_HISTORY_BOOKMARKS",
+    )
+
+    @JvmField
+    val EXTRA_DANGEROUS_PERMISSIONS: Set<String> = setOf(
+        "android.permission.REQUEST_INSTALL_PACKAGES",
+        "android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION",
+        "android.permission.ENFORCE_UPDATE_OWNERSHIP",
+        "android.permission.MEDIA_PROJECTION",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WRITE_SECURE_SETTINGS",
+        "android.permission.READ_SECURE_SETTINGS",
     )
 
     @JvmField

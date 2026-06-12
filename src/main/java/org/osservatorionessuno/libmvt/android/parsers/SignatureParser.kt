@@ -48,7 +48,7 @@ class SignatureParser {
                 result.v3SchemeSigners.forEach { addFromCert(it.certificate) }
                 result.v2SchemeSigners.forEach { addFromCert(it.certificate) }
                 result.v1SchemeSigners.forEach { addFromCert(it.certificate) }
-                LogUtils.w(
+                LogUtils.d(
                     "SignatureParser",
                     "Found ${collected.size} certificates after manual search",
                 )

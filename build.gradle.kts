@@ -1,10 +1,10 @@
 plugins {
-    kotlin("jvm") version "2.0.0"
+    alias(libs.plugins.kotlin.jvm)
     application
 }
 
 group = "org.osservatorionessuno"
-version = "0.0.1"
+version = "0.0.3"
 
 val generatedSourcesDir = layout.buildDirectory.dir("generated/sources/buildInfo/kotlin")
 
@@ -16,21 +16,22 @@ repositories {
 
 dependencies {
     // https://github.com/rednaga/axmlprinter — JitPack: v1.0.0 ok; v2.0.0 tag currently fails to build there
-    implementation("com.github.rednaga:axmlprinter:v1.0.0")
+    implementation(libs.axmlprinter)
     // https://android.googlesource.com/platform/tools/apksig/ (published as com.android.tools.build:apksig)
-    implementation("com.android.tools.build:apksig:8.13.2")
-    implementation("org.json:json:20240303")
-    implementation("org.ahocorasick:ahocorasick:0.6.3")
-    implementation("org.yaml:snakeyaml:2.2")
-    implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.6")
-    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    implementation(libs.apksig)
+    implementation(libs.org.json)
+    implementation(libs.ahocorasick)
+    implementation(libs.snakeyaml)
+    implementation(libs.kotlinx.cli)
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 application {
     mainClass.set("org.osservatorionessuno.Main")
 }
 
-tasks.register("generateBuildInfo") {
+val generateBuildInfo = tasks.register("generateBuildInfo") {
     outputs.dir(generatedSourcesDir)
 
     val outputDir = generatedSourcesDir.get().asFile
@@ -56,12 +57,15 @@ tasks.register("generateBuildInfo") {
 kotlin {
     jvmToolchain(17)
     sourceSets.main {
-        kotlin.srcDir(generatedSourcesDir)
+        // Tell Gradle which task produces this directory to avoid implicit-dependency validation errors.
+        kotlin.srcDir(
+            files(generatedSourcesDir).builtBy(generateBuildInfo),
+        )
     }
 }
 
 tasks.compileKotlin {
-    dependsOn("generateBuildInfo")
+    dependsOn(generateBuildInfo)
 }
 
 java {
@@ -70,7 +74,7 @@ java {
 }
 
 tasks.named<Jar>("sourcesJar") {
-    dependsOn("generateBuildInfo")
+    dependsOn(generateBuildInfo)
 }
 
 tasks.jar {
@@ -80,6 +84,11 @@ tasks.jar {
             "Implementation-Version" to version,
         )
     }
+}
+
+tasks.withType<AbstractArchiveTask>().configureEach {
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
 }
 
 tasks.test {
