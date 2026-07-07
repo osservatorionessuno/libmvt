@@ -1,9 +1,9 @@
 package org.osservatorionessuno.libmvt.android.artifacts
 
 import org.osservatorionessuno.libmvt.android.parsers.TombstoneProtobufParser
-import org.osservatorionessuno.libmvt.common.AlertLevel
 import org.osservatorionessuno.libmvt.common.AbstractInput
 import org.osservatorionessuno.libmvt.common.Detection
+import org.osservatorionessuno.libmvt.common.DetectionType
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType
 
 /**
@@ -112,17 +112,9 @@ class TombstoneCrashes : AndroidArtifact() {
             }
             val proc = map["process_name"] as? String
             if (uid != null && (uid == 0 || uid == 1000 || uid == 2000)) {
-                detected.add(
-                    Detection(
-                        AlertLevel.MEDIUM,
-                        getString("mvt_tombstone_crashes_uid_title"),
-                        String.format(
-                            getString("mvt_tombstone_crashes_uid_message"),
-                            proc ?: "",
-                            uid,
-                        ),
-                    ),
-                )
+                detected.add(Detection(DetectionType.TOMBSTONE_CRASHES_UID,
+                    proc ?: "",
+                    uid.toString()))
             }
         }
     }

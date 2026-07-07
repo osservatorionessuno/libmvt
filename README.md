@@ -18,5 +18,6 @@ Run analysis on an AndroidQF output directory or zip (same flow as Bugbane, with
 
 # Alternatively
 ./gradlew build
-java -jar build/libs/libmvt-0.1.0-SNAPSHOT.jar [--indicators <dir>] <directory-or.zip>
+./gradlew installDist
+./build/install/libmvt/bin/libmvt [--indicators <dir>] <directory-or.zip>
 ```

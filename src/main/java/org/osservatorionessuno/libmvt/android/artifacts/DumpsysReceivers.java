@@ -1,9 +1,9 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.osservatorionessuno.libmvt.common.AbstractInput;
-import org.osservatorionessuno.libmvt.common.AlertLevel;
-import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 import org.osservatorionessuno.libmvt.common.Detection;
+import org.osservatorionessuno.libmvt.common.DetectionType;
+import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 
 import java.util.*;
 import java.io.IOException;
@@ -69,42 +69,21 @@ public class DumpsysReceivers extends AndroidArtifact {
 
             String intent = map.get("intent");
             String receiver = map.get("receiver");
-
             switch (Objects.requireNonNull(intent)) {
                 case "android.provider.Telephony.NEW_OUTGOING_SMS":
-                    detected.add(new Detection(
-                        AlertLevel.LOG,
-                        getString("mvt_dumpsys_receivers_intercept_title"),
-                        String.format(getString("mvt_dumpsys_receivers_intercept_outgoing_sms_message"), receiver)
-                    ));
+                    detected.add(new Detection(DetectionType.DUMPSYS_RECEIVERS_OUTGOING_SMS, receiver));
                     break;
                 case "android.provider.Telephony.SMS_RECEIVED":
-                    detected.add(new Detection(
-                        AlertLevel.LOG,
-                        getString("mvt_dumpsys_receivers_intercept_title"),
-                        String.format(getString("mvt_dumpsys_receivers_intercept_incoming_sms_message"), receiver)
-                    ));
+                    detected.add(new Detection(DetectionType.DUMPSYS_RECEIVERS_INCOMING_SMS, receiver));
                     break;
                 case "android.intent.action.DATA_SMS_RECEIVED":
-                    detected.add(new Detection(
-                        AlertLevel.LOG,
-                        getString("mvt_dumpsys_receivers_intercept_title"),
-                        String.format(getString("mvt_dumpsys_receivers_intercept_data_sms_message"), receiver)
-                    ));
+                    detected.add(new Detection(DetectionType.DUMPSYS_RECEIVERS_DATA_SMS, receiver));
                     break;
                 case "android.intent.action.PHONE_STATE":
-                    detected.add(new Detection(
-                        AlertLevel.LOG,
-                        getString("mvt_dumpsys_receivers_intercept_title"),
-                        String.format(getString("mvt_dumpsys_receivers_intercept_phone_state_message"), receiver)
-                    ));
+                    detected.add(new Detection(DetectionType.DUMPSYS_RECEIVERS_PHONE_STATE, receiver));
                     break;
                 case "android.intent.action.NEW_OUTGOING_CALL":
-                    detected.add(new Detection(
-                        AlertLevel.LOG,
-                        getString("mvt_dumpsys_receivers_intercept_title"),
-                        String.format(getString("mvt_dumpsys_receivers_intercept_outgoing_call_message"), receiver)
-                    ));
+                    detected.add(new Detection(DetectionType.DUMPSYS_RECEIVERS_OUTGOING_CALL, receiver));
                     break;
             }
 

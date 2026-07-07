@@ -2,8 +2,8 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 
 import com.google.protobuf.CodedInputStream;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
-import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.Detection;
+import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 import org.osservatorionessuno.libmvt.common.Utils;
 
@@ -209,51 +209,27 @@ public class Packages extends AndroidArtifact {
             PackageResult result = (PackageResult) r;
 
             if (Utils.ROOT_PACKAGES.contains(result.name)) {
-                detected.add(new Detection(AlertLevel.MEDIUM, getString("mvt_packages_root_package_title"),
-                    String.format(
-                        getString("mvt_packages_root_package_message"),
-                        result.name
-                    )));
+                detected.add(new Detection(DetectionType.PACKAGES_ROOT_PACKAGE, result.name));
                 continue;
             }
 
             if ("null".equals(result.installer) && !result.system) {
-                detected.add(new Detection(AlertLevel.HIGH, getString("mvt_packages_non_system_package_title"),
-                    String.format(
-                        getString("mvt_packages_non_system_package_message"),
-                        result.name
-                    )));
+                detected.add(new Detection(DetectionType.PACKAGES_NON_SYSTEM_PACKAGE, result.name));
             } else if (Utils.THIRD_PARTY_STORE_INSTALLERS.contains(result.installer)) {
-                detected.add(new Detection(AlertLevel.INFO, getString("mvt_packages_third_party_store_package_title"),
-                    String.format(
-                        getString("mvt_packages_third_party_store_package_message"),
-                        result.installer,
-                        result.name
-                    )));
+                detected.add(new Detection(DetectionType.PACKAGES_THIRD_PARTY_STORE_PACKAGE,
+                    result.installer, result.name));
             } else if (Utils.BROWSER_INSTALLERS.contains(result.installer)) {
-                detected.add(new Detection(AlertLevel.MEDIUM, getString("mvt_packages_browser_package_title"),
-                    String.format(
-                        getString("mvt_packages_browser_package_message"),
-                        result.installer,
-                        result.name
-                    )));
+                detected.add(new Detection(DetectionType.PACKAGES_BROWSER_PACKAGE,
+                    result.installer, result.name));
             }
 
 
             if (Utils.SECURITY_PACKAGES.contains(result.name) && result.disabled) {
-                detected.add(new Detection(AlertLevel.MEDIUM, getString("mvt_packages_security_package_title"),
-                    String.format(
-                        getString("mvt_packages_security_package_message"),
-                        result.name
-                    )));
+                detected.add(new Detection(DetectionType.PACKAGES_SECURITY_PACKAGE, result.name));
             }
 
             if (Utils.SYSTEM_UPDATE_PACKAGES.contains(result.name) && result.disabled) {
-                detected.add(new Detection(AlertLevel.MEDIUM, getString("mvt_packages_system_update_package_title"),
-                    String.format(
-                        getString("mvt_packages_system_update_package_message"),
-                        result.name
-                    )));
+                detected.add(new Detection(DetectionType.PACKAGES_SYSTEM_UPDATE_PACKAGE, result.name));
             }
 
             // Continnue instead of returning because we want to check indicators for all packages.

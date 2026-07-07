@@ -1,8 +1,8 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.osservatorionessuno.libmvt.common.AbstractInput;
-import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.Detection;
+import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 
 import java.util.HashMap;
@@ -157,17 +157,9 @@ public class Mounts extends AndroidArtifact {
             if (Boolean.TRUE.equals(mount.get("is_system_partition")) && Boolean.TRUE.equals(mount.get("is_read_write"))) {
                 systemRwMounts.add(mount);
                 if ("/system".equals(mountPoint)) {
-                    detected.add(new Detection(AlertLevel.HIGH, getString("mvt_mounts_root_title"),
-                        String.format(
-                            getString("mvt_mounts_root_message"),
-                            mountPoint
-                        )));
+                    detected.add(new Detection(DetectionType.MOUNTS_ROOT, mountPoint));
                 } else {
-                    detected.add(new Detection(AlertLevel.HIGH, getString("mvt_mounts_system_title"),
-                        String.format(
-                            getString("mvt_mounts_system_message"),
-                            mountPoint
-                        )));
+                    detected.add(new Detection(DetectionType.MOUNTS_SYSTEM, mountPoint));
                 }
             }
 
@@ -186,20 +178,16 @@ public class Mounts extends AndroidArtifact {
                     continue;
                 }
                 suspiciousMounts.add(mount);
-                detected.add(new Detection(AlertLevel.LOW, getString("mvt_mounts_suspicious_title"),
-                    String.format(getString("mvt_mounts_suspicious_message"),
-                        mountPoint, String.join(", ", suspiciousOpts)
-                    )));
+                detected.add(new Detection(DetectionType.MOUNTS_SUSPICIOUS,
+                    mountPoint, String.join(", ", suspiciousOpts)));
             }
 
             // Log interesting mount information (just log - map to LOG detection)
             if ("/data".equals(mountPoint) || mountPoint.startsWith("/sdcard")) {
-                detected.add(new Detection(AlertLevel.LOG, getString("mvt_mounts_data_title"),
-                    String.format(getString("mvt_mounts_data_message"),
-                        mountPoint,
-                        mount.get("filesystem_type"),
-                        mount.get("mount_options")
-                    )));
+                detected.add(new Detection(DetectionType.MOUNTS_DATA,
+                    mountPoint,
+                    String.valueOf(mount.get("filesystem_type")),
+                    String.valueOf(mount.get("mount_options"))));
             }
         }
 

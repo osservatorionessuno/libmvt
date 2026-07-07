@@ -1,8 +1,8 @@
 package org.osservatorionessuno.libmvt.android.artifacts
 
-import org.osservatorionessuno.libmvt.common.AlertLevel
 import org.osservatorionessuno.libmvt.common.AbstractInput
 import org.osservatorionessuno.libmvt.common.Detection
+import org.osservatorionessuno.libmvt.common.DetectionType
 
 /** Parser for SELinux status files. */
 class SELinux : AndroidArtifact() {
@@ -24,16 +24,7 @@ class SELinux : AndroidArtifact() {
         val statusMap = results[0] as? Map<String, String> ?: return
         val entry = statusMap["status"] ?: ""
         if (entry != "enforcing") {
-            detected.add(
-                Detection(
-                    AlertLevel.HIGH,
-                    getString("mvt_selinux_status_title"),
-                    String.format(
-                        getString("mvt_selinux_status_message"),
-                        entry
-                    )
-                )
-            )
+            detected.add(Detection(DetectionType.SELINUX_STATUS, entry))
         }
     }
 }

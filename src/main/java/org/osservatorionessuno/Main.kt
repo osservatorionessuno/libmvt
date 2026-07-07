@@ -5,10 +5,10 @@ import org.json.JSONObject
 import org.osservatorionessuno.libmvt.android.ForensicRunner
 import org.osservatorionessuno.libmvt.android.parsers.APKParser
 import org.osservatorionessuno.libmvt.common.Artifact
+import org.osservatorionessuno.libmvt.common.GroupedDetection
 import org.osservatorionessuno.libmvt.common.Indicators
 import org.osservatorionessuno.libmvt.common.IndicatorsUpdates
 import org.osservatorionessuno.libmvt.common.JvmMapStringResolver
-import org.osservatorionessuno.libmvt.common.logging.LogUtils
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -69,9 +69,22 @@ object Main {
             else -> throw CliArgs.CliException("Input must be a directory or a .zip file: ${cli.inputPath}")
         }
 
-        return buildDetectionsArray(results)
+        return GroupedDetection.toJsonArray(
+            GroupedDetection.fromArtifacts(results),
+            JvmMapStringResolver(),
+        )
     }
 
+    private fun printDetections(groupedResults: JSONArray, pretty: Boolean) {
+        val root = JSONObject()
+        root.put("groupedResults", groupedResults)
+
+        val json = if (pretty) root.toString(2) else root.toString()
+        println(json)
+
+        println("Detections count: ${groupedResults.length()}")
+    }
+    
     private fun loadIndicators(indicatorsDir: Path): Indicators {
         val indicators = Indicators()
 
@@ -86,33 +99,6 @@ object Main {
 
         indicators.loadFromDirectory(indicatorsDir.toFile())
         return indicators
-    }
-
-    private fun buildDetectionsArray(results: Map<String, Artifact>): JSONArray {
-        val resultsArray = JSONArray()
-
-        for ((fileName, artifact) in results) {
-            for (det in artifact.detected) {
-                val obj = JSONObject()
-                obj.put("file", fileName)
-                obj.put("level", det.level.name)
-                obj.put("title", det.title)
-                obj.put("context", det.context)
-                resultsArray.put(obj)
-            }
-        }
-
-        return resultsArray
-    }
-
-    private fun printDetections(detections: JSONArray, pretty: Boolean) {
-        val root = JSONObject()
-        root.put("detections", detections)
-
-        val json = if (pretty) root.toString(2) else root.toString()
-        println(json)
-        
-        println("Detections count: ${detections.length()}")
     }
 
     private fun analyzeAPK(apkFile: File) {

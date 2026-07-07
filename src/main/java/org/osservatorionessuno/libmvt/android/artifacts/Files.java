@@ -3,8 +3,8 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 import com.google.protobuf.CodedInputStream;
 import org.json.JSONException;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
-import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.Detection;
+import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 
 import java.util.List;
@@ -127,7 +127,6 @@ public class Files extends AndroidArtifact {
                 if (path.startsWith(suspicious)) {
                     String fileType = "";
 
-                    // Determine if the file is executable (Unix mode bits)
                     Object modeVal = file.get("mode");
                     long mode = 0;
                     if (modeVal instanceof Number) {
@@ -139,13 +138,11 @@ public class Files extends AndroidArtifact {
                             // ignore
                         }
                     }
-                    // executable for owner, group, or others (octal 0100, 0010, 0001)
-                    if ((mode & 0111) != 0) { // (S_IXUSR | S_IXGRP | S_IXOTH)
+                    if ((mode & 0111) != 0) {
                         fileType = "executable ";
                     }
 
-                    String msg = String.format(getString("mvt_files_suspicious_path_message"), fileType, path);
-                    detected.add(new Detection(AlertLevel.HIGH, getString("mvt_files_suspicious_path_title"), msg));
+                    detected.add(new Detection(DetectionType.FILES_SUSPICIOUS_PATH, fileType, path));
                 }
             }
  
