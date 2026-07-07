@@ -3,6 +3,7 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
+import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Indicators;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 
@@ -94,6 +95,7 @@ public class DumpsysAccessibilityTest {
         da.checkIndicators();
 
         assertEquals(1, da.detected.size());
-        assertTrue(da.detected.get(0).getContext().contains("APP_ID"));
+        assertEquals(DetectionType.IOC_MATCH.getId(), da.detected.get(0).getId());
+        assertTrue(da.detected.get(0).getValue().stream().anyMatch(v -> v.contains("com.sec.android.app.camera")));
     }
 }

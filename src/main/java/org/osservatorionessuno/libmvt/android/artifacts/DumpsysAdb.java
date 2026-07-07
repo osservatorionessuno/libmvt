@@ -1,8 +1,8 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.osservatorionessuno.libmvt.common.AbstractInput;
-import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.Detection;
+import org.osservatorionessuno.libmvt.common.DetectionType;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.ByteArrayInputStream;
@@ -187,12 +187,9 @@ public class DumpsysAdb extends AndroidArtifact {
             List<Map<String, String>> userKeys = (List<Map<String, String>>) map.get("user_keys");
             if (userKeys != null) {
                 for (Map<String, String> userKey : userKeys) {
-                    detected.add(new Detection(AlertLevel.INFO, getString("mvt_adb_fingerprint_title"),
-                        String.format(
-                            getString("mvt_adb_fingerprint_message"),
-                            userKey.get("user"), 
-                            userKey.get("fingerprint")
-                        )));
+                    detected.add(new Detection(DetectionType.ADB_FINGERPRINT,
+                        userKey.get("user"),
+                        userKey.get("fingerprint")));
                 }
             }
         }

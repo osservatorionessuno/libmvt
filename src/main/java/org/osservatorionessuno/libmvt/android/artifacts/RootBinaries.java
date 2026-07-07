@@ -3,9 +3,8 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
-import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.Detection;
-import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
+import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Utils;
 import java.util.List;
 import java.io.BufferedInputStream;
@@ -59,27 +58,14 @@ public class RootBinaries extends AndroidArtifact {
             String path = (String) obj;
             if (path == null || path.trim().isEmpty()) continue;
 
-            // Extract binary name from path
             String[] parts = path.replace("\\", "/").split("/");
             String binaryName = parts[parts.length - 1].toLowerCase();
-
-            // If a description is found, than the binary is known, otherwise it is unknown.
-            String description = Utils.ROOT_BINARIES.get(binaryName.toLowerCase());
-            if (description != null) {
-                detected.add(new Detection(AlertLevel.HIGH, getString("mvt_root_binaries_title"),
-                    String.format(
-                        getString("mvt_root_binaries_message"),
-                        description,
-                        path
-                    )));
-            } else {
-                detected.add(new Detection(AlertLevel.HIGH, getString("mvt_root_binaries_title"),
-                    String.format(
-                        getString("mvt_root_binaries_message"),
-                        "unknown root file",
-                        path
-                    )));
+            String description = Utils.ROOT_BINARIES.get(binaryName);
+            if (description == null) {
+                description = "unknown root file";
             }
+
+            detected.add(new Detection(DetectionType.ROOT_BINARIES, description, path));
         }
     }
 }

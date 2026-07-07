@@ -1,8 +1,8 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.osservatorionessuno.libmvt.common.AbstractInput;
-import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.Detection;
+import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 
 import java.util.HashMap;
@@ -63,11 +63,7 @@ public class GetProp extends AndroidArtifact {
             if (Objects.equals(name, "ro.build.version.security_patch")) {
                 String patchLevel = map.get("value");
                 if (daysSinceSecurityPatchLevel(patchLevel) > 180) {
-                    detected.add(new Detection(AlertLevel.MEDIUM, getString("mvt_getprop_security_patch_title"),
-                        String.format(
-                            getString("mvt_getprop_security_patch_message"),
-                            patchLevel
-                        )));
+                    detected.add(new Detection(DetectionType.GETPROP_SECURITY_PATCH, patchLevel));
                 }
                 continue;
             }

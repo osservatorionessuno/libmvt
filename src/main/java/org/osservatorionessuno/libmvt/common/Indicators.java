@@ -221,16 +221,9 @@ public class Indicators {
         if (trie == null) return Collections.emptyList();
 
         List<Detection> detections = new ArrayList<>();
-        StringResolver resolver = (stringResolver != null) ? stringResolver : new JvmMapStringResolver();
-        String title = resolver.get("mvt_ioc_title");
-        String messageFormat = resolver.get("mvt_ioc_message");
-
         for (Emit e : trie.parseText(s)) {
-            detections.add(new Detection(
-                AlertLevel.CRITICAL,
-                title,
-                String.format(messageFormat, type.name(), e.getKeyword(), s)
-            ));
+            detections.add(new Detection(DetectionType.IOC_MATCH,
+                type.name(), e.getKeyword(), s));
         }
 
         return detections;

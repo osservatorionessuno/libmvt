@@ -1,9 +1,9 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.osservatorionessuno.libmvt.common.AbstractInput;
-import org.osservatorionessuno.libmvt.common.AlertLevel;
-import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 import org.osservatorionessuno.libmvt.common.Detection;
+import org.osservatorionessuno.libmvt.common.DetectionType;
+import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 
 import java.util.*;
 import java.io.IOException;
@@ -119,11 +119,11 @@ public class DumpsysAppops extends AndroidArtifact {
             for (Map<String, Object> perm : perms) {
                 String permName = (String) perm.get("name");
                 if (RISKY_PERMISSIONS.contains(permName) || riskyPkg) {
-                    detected.add(new Detection(AlertLevel.MEDIUM, getString("mvt_appops_risky_permission_title"),
-                        String.format(
-                            getString("mvt_appops_risky_permission_message"),
-                            pkgName, permName, perm.get("access"), perm.get("timestamp")
-                        )));
+                    detected.add(new Detection(DetectionType.APPOPS_RISKY_PERMISSION,
+                        pkgName,
+                        permName,
+                        String.valueOf(perm.get("access")),
+                        String.valueOf(perm.get("timestamp"))));
                 }
             }
         }

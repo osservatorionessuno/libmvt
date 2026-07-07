@@ -1,10 +1,10 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.osservatorionessuno.libmvt.common.AbstractInput;
-import org.osservatorionessuno.libmvt.common.AlertLevel;
+import org.osservatorionessuno.libmvt.common.Detection;
+import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 import org.osservatorionessuno.libmvt.common.Utils;
-import org.osservatorionessuno.libmvt.common.Detection;
 
 import java.util.*;
 import java.util.regex.Matcher;
@@ -193,11 +193,7 @@ public class DumpsysPackages extends AndroidArtifact {
             Map<String, Object> record = (Map<String, Object>) obj;
             String pkg = (String) record.get("package_name");
             if (Utils.ROOT_PACKAGES.contains(pkg)) {
-                detected.add(new Detection(AlertLevel.MEDIUM, getString("mvt_packages_root_package_title"),
-                    String.format(
-                        getString("mvt_packages_root_package_message"),
-                        pkg
-                    )));
+                detected.add(new Detection(DetectionType.PACKAGES_ROOT_PACKAGE, pkg));
                 continue;
             }
             if (indicators != null) {
