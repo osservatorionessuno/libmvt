@@ -5,7 +5,6 @@ import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 
 import java.util.*;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -16,28 +15,29 @@ public class DumpsysDBInfo extends AndroidArtifact {
 
     @Override
     public List<String> paths() {
-        return List.of("dumpsys.txt");
+        return List.of("dumpsys.txt", "bugreport-*.txt");
     }
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
         results.clear();
-        String pool = null;
-        boolean inOperations = false;
-        for (String line : collectLines(artifactInput.inputStream)) {
+        String[] pool = { null };
+        boolean[] inOperations = { false };
+
+        extractDumpsysSection(artifactInput.inputStream, "dbinfo:", line -> {
             if (line.startsWith("Connection pool for ")) {
-                pool = line.replace("Connection pool for ", "").replaceFirst(":$", "");
+                pool[0] = line.replace("Connection pool for ", "").replaceFirst(":$", "");
             }
-            if (pool == null) continue;
+            if (pool[0] == null) return;
             if (line.trim().equals("Most recently executed operations:")) {
-                inOperations = true;
-                continue;
+                inOperations[0] = true;
+                return;
             }
-            if (!inOperations) continue;
-            if (!line.startsWith("        ")) { // 8 spaces
-                inOperations = false;
-                pool = null;
-                continue;
+            if (!inOperations[0]) return;
+            if (!line.startsWith("        ")) {
+                inOperations[0] = false;
+                pool[0] = null;
+                return;
             }
             Matcher m = RXP.matcher(line);
             if (m.find()) {
@@ -46,19 +46,19 @@ public class DumpsysDBInfo extends AndroidArtifact {
                 map.put("pid", m.group(2));
                 map.put("action", m.group(3));
                 map.put("sql", m.group(4));
-                map.put("path", pool);
+                map.put("path", pool[0]);
                 results.add(map);
             } else {
                 Matcher m2 = RXP_NO_PID.matcher(line);
-                if (!m2.find()) continue;
+                if (!m2.find()) return;
                 Map<String, String> map = new HashMap<>();
                 map.put("isodate", m2.group(1));
                 map.put("action", m2.group(2));
                 map.put("sql", m2.group(3));
-                map.put("path", pool);
+                map.put("path", pool[0]);
                 results.add(map);
             }
-        }
+        });
     }
 
     @Override

@@ -63,10 +63,7 @@ public class CertificateParserTest {
         assertEquals(0, result.getErrors().size());
 
         X509Certificate cert = result.getSignerCertificates().get(0);
-        System.out.println(cert.getSubjectX500Principal().getName());
-
         CertificateParser.CertificateInfo info = CertificateParser.fromX509Certificate(cert);
-        System.out.println(info.getSubject());
 
         assertNotNull(info);
         assertNotNull(info.getSubject());

@@ -5,22 +5,28 @@ import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 
 import java.util.*;
 import java.io.IOException;
-import java.io.InputStream;
 
 /** Parser for dumpsys battery history output. */
 public class DumpsysBatteryHistory extends AndroidArtifact {
 
     @Override
     public List<String> paths() {
-        return List.of("dumpsys.txt");
+        return List.of("dumpsys.txt", "bugreport-*.txt");
     }
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
         results.clear();
-        for (String line : collectLines(artifactInput.inputStream)) {
-            if (line.startsWith("Battery History ")) continue;
-            if (line.trim().isEmpty()) break;
+        boolean[] done = { false };
+
+        extractDumpsysSection(artifactInput.inputStream, "batterystats:", line -> {
+            if (done[0]) return;
+            if (line.startsWith("Battery History ")) return;
+            if (line.trim().isEmpty()) {
+                done[0] = true;
+                return;
+            }
+
             String trimmed = line.trim();
             String[] parts = trimmed.split(" ", 2);
             String timeElapsed = parts.length > 0 ? parts[0] : "";
@@ -33,7 +39,7 @@ public class DumpsysBatteryHistory extends AndroidArtifact {
                 event = "start_job";
                 int start = line.indexOf("+job") + 5;
                 int colon = line.indexOf(':', start);
-                if (colon < 0) continue;
+                if (colon < 0) return;
                 uid = line.substring(start, colon);
                 service = line.substring(colon + 1).replace("\"", "").trim();
                 packageName = service.split("/")[0];
@@ -41,20 +47,20 @@ public class DumpsysBatteryHistory extends AndroidArtifact {
                 event = "end_job";
                 int start = line.indexOf("-job") + 5;
                 int colon = line.indexOf(':', start);
-                if (colon < 0) continue;
+                if (colon < 0) return;
                 uid = line.substring(start, colon);
                 service = line.substring(colon + 1).replace("\"", "").trim();
                 packageName = service.split("/")[0];
             } else if (line.contains("+running +wake_lock=")) {
                 int start = line.indexOf("+running +wake_lock=") + 21;
                 int colon = line.indexOf(':', start);
-                if (colon < 0) continue;
+                if (colon < 0) return;
                 uid = line.substring(start, colon);
                 event = "wake";
                 int walarm = line.indexOf("*walarm*:");
-                if (walarm < 0) continue;
+                if (walarm < 0) return;
                 service = line.substring(walarm + 9).split(" ")[0].replace("\"", "").trim();
-                if (service.isEmpty() || !service.contains("/")) continue;
+                if (service.isEmpty() || !service.contains("/")) return;
                 packageName = service.split("/")[0];
             } else if (line.contains("+top=") || line.contains("-top")) {
                 int topPos;
@@ -66,11 +72,11 @@ public class DumpsysBatteryHistory extends AndroidArtifact {
                     topPos = line.indexOf("-top");
                 }
                 int colon = line.indexOf(':', topPos);
-                if (colon < 0) continue;
+                if (colon < 0) return;
                 uid = line.substring(topPos + 5, colon);
                 packageName = line.substring(colon + 1).replace("\"", "").trim();
             } else {
-                continue;
+                return;
             }
 
             Map<String, String> map = new HashMap<>();
@@ -80,7 +86,7 @@ public class DumpsysBatteryHistory extends AndroidArtifact {
             map.put("package_name", packageName);
             map.put("service", service);
             results.add(map);
-        }
+        });
     }
 
     @Override

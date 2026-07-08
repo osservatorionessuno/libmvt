@@ -5,25 +5,25 @@ import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 
 import java.util.*;
 import java.io.IOException;
-import java.io.InputStream;
 
 /** Parser for dumpsys platform_compat output. */
 public class DumpsysPlatformCompat extends AndroidArtifact {
 
     @Override
     public List<String> paths() {
-        return List.of("dumpsys.txt");
+        return List.of("dumpsys.txt", "bugreport-*.txt");
     }
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
         results.clear();
         if (artifactInput.inputStream == null) return;
-        for (String line : collectLines(artifactInput.inputStream)) {
+
+        extractDumpsysSection(artifactInput.inputStream, "platform_compat:", line -> {
             line = line.trim();
-            if (!line.startsWith("ChangeId(168419799; name=DOWNSCALED")) continue;
+            if (!line.startsWith("ChangeId(168419799; name=DOWNSCALED")) return;
             int idx = line.indexOf("rawOverrides={");
-            if (idx < 0) continue;
+            if (idx < 0) return;
             String overrides = line.substring(idx + 14);
             int end = overrides.indexOf("};");
             if (end >= 0) overrides = overrides.substring(0, end);
@@ -33,7 +33,7 @@ public class DumpsysPlatformCompat extends AndroidArtifact {
                 rec.put("package_name", pkg);
                 results.add(rec);
             }
-        }
+        });
     }
 
     @Override

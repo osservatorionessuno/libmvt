@@ -33,7 +33,7 @@ object APKParser {
 
     @JvmStatic
     fun parseAPK(apk: File): APKInfo {
-        LogUtils.i("APKParser", "Parsing APK: ${apk.name}")
+        LogUtils.d("APKParser", "Parsing APK: ${apk.name}")
 
         // Get a list of all files in the APK
         var zipFile = ZipFile(apk)

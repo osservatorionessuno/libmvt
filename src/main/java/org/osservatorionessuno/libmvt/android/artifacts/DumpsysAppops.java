@@ -16,74 +16,78 @@ public class DumpsysAppops extends AndroidArtifact {
 
     @Override
     public List<String> paths() {
-        return List.of("dumpsys.txt");
+        return List.of("dumpsys.txt", "bugreport-*.txt");
     }
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
         results.clear();
-        Map<String, Object> pkg = null;
-        Map<String, Object> perm = new HashMap<>();
-        Map<String, Object> entry = new HashMap<>();
-        String uid = null;
-        boolean inPackages = false;
-        for (String line : collectLines(artifactInput.inputStream)) {
-            if (line.startsWith("  Uid 0:")) inPackages = true;
-            if (!inPackages) continue;
+        Map<String, Object>[] pkg = new Map[] { null };
+        Map<String, Object>[] perm = new Map[] { new HashMap<>() };
+        Map<String, Object>[] entry = new Map[] { new HashMap<>() };
+        String[] uid = { null };
+        boolean[] inPackages = { false };
+        boolean[] done = { false };
+
+        extractDumpsysSection(artifactInput.inputStream, "appops:", line -> {
+            if (done[0]) return;
+            if (line.startsWith("  Uid 0:")) inPackages[0] = true;
+            if (!inPackages[0]) return;
             if (line.startsWith("  Uid ")) {
-                uid = line.substring(6, line.length() - 1);
-                if (!entry.isEmpty()) { addEntry(perm, entry); entry = new HashMap<>(); }
-                if (pkg != null) {
-                    finishPerm(pkg, perm);
-                    results.add(pkg);
+                uid[0] = line.substring(6, line.length() - 1);
+                if (!entry[0].isEmpty()) { addEntry(perm[0], entry[0]); entry[0] = new HashMap<>(); }
+                if (pkg[0] != null) {
+                    finishPerm(pkg[0], perm[0]);
+                    results.add(pkg[0]);
                 }
-                pkg = null;
-                perm = new HashMap<>();
-                continue;
+                pkg[0] = null;
+                perm[0] = new HashMap<>();
+                return;
             }
             if (line.startsWith("    Package ")) {
-                if (!entry.isEmpty()) { addEntry(perm, entry); entry = new HashMap<>(); }
-                if (pkg != null) {
-                    finishPerm(pkg, perm);
-                    results.add(pkg);
+                if (!entry[0].isEmpty()) { addEntry(perm[0], entry[0]); entry[0] = new HashMap<>(); }
+                if (pkg[0] != null) {
+                    finishPerm(pkg[0], perm[0]);
+                    results.add(pkg[0]);
                 }
-                pkg = new HashMap<>();
-                pkg.put("package_name", line.substring(12, line.length() - 1));
-                pkg.put("permissions", new ArrayList<>());
-                pkg.put("uid", uid);
-                perm = new HashMap<>();
-                continue;
+                pkg[0] = new HashMap<>();
+                pkg[0].put("package_name", line.substring(12, line.length() - 1));
+                pkg[0].put("permissions", new ArrayList<>());
+                pkg[0].put("uid", uid[0]);
+                perm[0] = new HashMap<>();
+                return;
             }
-            if (pkg != null && line.startsWith("      ") && line.length() > 6 && line.charAt(6) != ' ') {
-                if (!entry.isEmpty()) { addEntry(perm, entry); entry = new HashMap<>(); }
-                finishPerm(pkg, perm);
-                perm = new HashMap<>();
+            if (pkg[0] != null && line.startsWith("      ") && line.length() > 6 && line.charAt(6) != ' ') {
+                if (!entry[0].isEmpty()) { addEntry(perm[0], entry[0]); entry[0] = new HashMap<>(); }
+                finishPerm(pkg[0], perm[0]);
+                perm[0] = new HashMap<>();
                 String[] parts = line.trim().split("\\s+");
-                perm.put("name", parts[0]);
-                perm.put("entries", new ArrayList<>());
-                if (parts.length > 1) perm.put("access", parts[1].substring(1, parts[1].length()-1));
-                continue;
+                perm[0].put("name", parts[0]);
+                perm[0].put("entries", new ArrayList<>());
+                if (parts.length > 1) perm[0].put("access", parts[1].substring(1, parts[1].length() - 1));
+                return;
             }
             if (line.startsWith("          ")) {
                 String access = line.split(":")[0].trim();
-                if (!access.equals("Access") && !access.equals("Reject")) continue;
-                if (!entry.isEmpty()) { addEntry(perm, entry); entry = new HashMap<>(); }
-                entry.put("access", access);
-                int l = line.indexOf('['); int r = line.indexOf(']');
-                if (l > 0 && r > l) entry.put("type", line.substring(l+1,r));
-                int lp = line.indexOf(']', r)+1;
+                if (!access.equals("Access") && !access.equals("Reject")) return;
+                if (!entry[0].isEmpty()) { addEntry(perm[0], entry[0]); entry[0] = new HashMap<>(); }
+                entry[0].put("access", access);
+                int l = line.indexOf('[');
+                int r = line.indexOf(']');
+                if (l > 0 && r > l) entry[0].put("type", line.substring(l + 1, r));
+                int lp = line.indexOf(']', r) + 1;
                 int lp2 = line.indexOf('(', lp);
                 if (lp > 0 && lp2 > lp) {
                     String ts = line.substring(lp, lp2).trim();
-                    entry.put("timestamp", ts); // keep as string
+                    entry[0].put("timestamp", ts);
                 }
-                continue;
+                return;
             }
-            if (line.trim().isEmpty()) break;
-        }
-        if (!entry.isEmpty()) addEntry(perm, entry);
-        finishPerm(pkg, perm);
-        if (pkg != null) results.add(pkg);
+            if (line.trim().isEmpty()) done[0] = true;
+        });
+        if (!entry[0].isEmpty()) addEntry(perm[0], entry[0]);
+        finishPerm(pkg[0], perm[0]);
+        if (pkg[0] != null) results.add(pkg[0]);
     }
 
     @SuppressWarnings("unchecked")

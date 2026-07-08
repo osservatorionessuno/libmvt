@@ -64,7 +64,7 @@ public class DumpsysPackagesTest {
     @Test
     public void testRootPackageDetection() throws Exception {
         DumpsysPackages dpa = new DumpsysPackages();
-        String sample = "Packages:\n  Package [com.topjohnwu.magisk] (test)\n    userId=0\n";
+        String sample = "DUMP OF SERVICE package:\nPackages:\n  Package [com.topjohnwu.magisk] (test)\n    userId=0\n";
         dpa.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(sample.getBytes(StandardCharsets.UTF_8))) {});
         dpa.checkIndicators();
         assertFalse(dpa.detected.isEmpty());

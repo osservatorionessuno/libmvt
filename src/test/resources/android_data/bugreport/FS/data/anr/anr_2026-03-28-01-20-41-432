@@ -1,0 +1,23 @@
+Subject: Input dispatching timed out (Application does not have a focused window).
+
+RssHwmKb: 353812
+RssKb: 248976
+
+----- dumping pid: 25749 at 20970266
+
+----- pid 25749 at 2026-03-28 01:20:41.313405056+0100 -----
+Cmd line: org.thoughtcrime.securesms
+Build fingerprint: 'Redmi/topaz_eea/topaz:15/AQ3A.240829.003/OS2.0.208.0.VMGEUXM:user/release-keys'
+ABI: 'arm64'
+DALVIK THREADS (2):
+"main" prio=5 tid=1 Native
+  | sysTid=25749 nice=-10 cgrp=top-app sched=0/0 handle=0x7283e54d28
+  at android.os.MessageQueue.nativePollOnce(Native method)
+  at android.app.ActivityThread.main(ActivityThread.java:9593)
+
+----- end 25749 -----
+
+----- Waiting Channels: pid 25749 at 2026-03-28 01:20:41.300851410+0100 -----
+Cmd line: org.thoughtcrime.securesms
+
+sysTid=25749     state=R    do_epoll_wait

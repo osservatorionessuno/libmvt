@@ -39,10 +39,8 @@ object Main {
                     }
                 }
             } else {
-                if (inputPath.isDirectory) {
-                    val detections = runAnalysis(cli)
-                    printDetections(detections, cli.pretty)
-                }
+                val detections = runAnalysis(cli)
+                printDetections(detections, cli.pretty)
             }
             0
         } catch (e: CliArgs.CliException) {
