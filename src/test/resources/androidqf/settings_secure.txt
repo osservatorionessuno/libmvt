@@ -1,0 +1,3 @@
+accessibility_enabled=1
+package_verifier_enable=0
+package_verifier_user_consent=1

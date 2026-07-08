@@ -1,3 +1,4 @@
+DUMP OF SERVICE appops:
 Current AppOps Service state:
   Settings:
     top_state_settle_time=+30s0ms

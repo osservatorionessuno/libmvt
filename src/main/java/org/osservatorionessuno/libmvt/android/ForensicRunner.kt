@@ -1,15 +1,14 @@
 package org.osservatorionessuno.libmvt.android
 
-import org.osservatorionessuno.libmvt.android.artifacts.*
+import org.osservatorionessuno.libmvt.android.artifacts.AndroidArtifact
 import org.osservatorionessuno.libmvt.common.AbstractInput
 import org.osservatorionessuno.libmvt.common.Artifact
 import org.osservatorionessuno.libmvt.common.Indicators
+import org.osservatorionessuno.libmvt.common.ReopenableInput
 import org.osservatorionessuno.libmvt.common.StringResolver
 import org.osservatorionessuno.libmvt.common.logging.LogUtils
 import java.io.File
 import java.io.InputStream
-import java.io.IOException
-import java.nio.charset.Charset
 import java.util.LinkedHashMap
 import java.util.zip.ZipFile
 
@@ -21,6 +20,13 @@ class ArtifactInput(
 /**
  * Simple helper to run the available AndroidQF artifact parsers on a folder
  * or zip containing extracted androidqf data.
+ * 
+ * Axioms:
+ * - Each module declares path patterns via [AndroidArtifact.paths] (exact or glob).
+ * - Every matching module receives an [ArtifactInput]; only the module should read its stream.
+ * - Custom stream sources use [ReopenableInput] so each module gets a fresh stream.
+ * - A fresh module instance is created per parse; results are then merged.
+ * - [SKIP_FILES] and paths under `tmp/` are ignored.
  */
 class ForensicRunner(private val stringResolver: StringResolver) {
     private var indicators: Indicators? = null
@@ -38,139 +44,135 @@ class ForensicRunner(private val stringResolver: StringResolver) {
     @Throws(Exception::class)
     fun streamLegacyAnalysisFromDirectory(directory: File): Map<String, Artifact> {
         LogUtils.d(TAG, "streamLegacyAnalysisFromDirectory: $directory")
-        val map = LinkedHashMap<String, Artifact>()
-        val files = directory.listFiles()
-        if (files == null) return map
-        for (file in files) {
-            if (!file.isFile) continue;
-
-            val art = streamFileAnalysis(ArtifactInput(file.absolutePath, file.inputStream()))
-            if (art != null) {
-                map[file.name] = art
-            }
-        }
-        return map
+        val results = LinkedHashMap<String, Artifact>()
+        collectFromDirectory(directory, directory, results)
+        return results
     }
 
     /** This is a method to analyze a zip file. */
     @Throws(Exception::class)
     fun streamAnalysisFromZip(zip: File): Map<String, Artifact> {
         LogUtils.d(TAG, "streamAnalysisFromZip: $zip")
-        val map = LinkedHashMap<String, Artifact>()
-        val zipFile = ZipFile(zip)
-        val entries = zipFile.entries()
-        for (entry in entries) {
-            val art = streamFileAnalysis(ArtifactInput(entry.name, zipFile.getInputStream(entry)))
-            if (art != null) {
-                map[entry.name] = art
+        val results = LinkedHashMap<String, Artifact>()
+        ZipFile(zip).use { zipFile ->
+            for (entry in zipFile.entries()) {
+                analyzePath(entry.name) { zipFile.getInputStream(entry) }?.let { artifact ->
+                    results[entry.name] = artifact
+                }
             }
         }
-        return map
+        return results
     }
 
-    /** Analyze already-open artifact streams from an encrypted or custom container. */
+    /** Analyze entries from a custom source (e.g. encrypted container). */
     @Throws(Exception::class)
-    fun streamAnalysis(entries: Sequence<AbstractInput>): Map<String, Artifact> {
+    fun streamAnalysis(entries: Iterable<ReopenableInput>): Map<String, Artifact> {
         LogUtils.d(TAG, "streamAnalysis: $entries")
-        val map = LinkedHashMap<String, Artifact>()
+        val results = LinkedHashMap<String, Artifact>()
         for (entry in entries) {
-            val art = streamFileAnalysis(entry)
-            if (art != null) {
-                map[entry.path] = art
+            analyzePath(entry.path) { entry.openStream() }?.let { artifact ->
+                results[entry.path] = artifact
             }
         }
-        return map
+        return results
     }
 
-    /** Format-agnostic analysis of a file stream.
-     * 
-     * @param path the path of the file
-     * @param content the content of the file
-     * @return the artifact
-     * 
-     * This method is used to analyze a file stream. It will determine the module to use based on the file name
-     * and then parse the content of the file using the appropriate module.
-     * 
-     * The method will log an error and return null if the file is not known.
+    @Throws(Exception::class)
+    fun streamFileAnalysis(entry: ReopenableInput): Artifact? =
+        analyzePath(entry.path) { entry.openStream() }
+
+    /**
+     * Match [path] against registered modules and parse with a fresh stream from [openStream] per module.
      */
     @Throws(Exception::class)
-    fun streamFileAnalysis(artifactInput: AbstractInput): Artifact? {
-        LogUtils.d(TAG, "streamFileAnalysis: ${artifactInput.path}")
-        artifactInput.inputStream.use {
-            val fileName = artifactInput.path.split('/').last()
-            if (fileName in SKIP_FILES) {
-                LogUtils.d(TAG, "Skipping file: $fileName")
-                return null
-            }
-
-            // Some folders are not relevant for the analysis
-            if (artifactInput.path.startsWith("tmp/")) {
-                LogUtils.d(TAG, "Skipping temporary file: ${artifactInput.path}")
-                return null
-            }
-
-            val index = MODULES_MAP[fileName]
-            if (index == null) {
-                // TODO: convert to debug log once in production
-                LogUtils.w(TAG, "Unknown file: ${artifactInput.path}")
-                return null
-            }
-            val art = MODULES_LIST[index]
-            art.parse(artifactInput)
-            return finalizeArtifact(art)
+    private fun analyzePath(path: String, openStream: () -> InputStream): Artifact? {
+        if (shouldSkip(path)) {
+            return null
         }
+
+        val moduleIndices = ArtifactModuleRegistry.findModuleIndices(path)
+        if (moduleIndices.isEmpty()) {
+            return null
+        }
+
+        LogUtils.d(TAG, "analyzePath: $path -> modules $moduleIndices")
+
+        var merged: AndroidArtifact? = null
+        for (index in moduleIndices) {
+            openStream().use { stream ->
+                val module = ArtifactModuleRegistry.create(index)
+                module.parse(ArtifactInput(path, stream))
+                finalizeArtifact(module)
+                merged = mergeInto(merged, module)
+            }
+        }
+        return merged
     }
 
-    private fun finalizeArtifact(art: AndroidArtifact): Artifact {
-        art.stringResolver = stringResolver
-        indicators?.let { ind: Indicators ->
-            ind.setStringResolver(stringResolver)
-            art.indicators = ind
-            art.checkIndicators()
+    private fun shouldSkip(path: String): Boolean {
+        val fileName = path.substringAfterLast('/')
+        if (fileName in SKIP_FILES) {
+            LogUtils.d(TAG, "Skipping file: $fileName")
+            return true
         }
-        return art
+        if (path.startsWith("tmp/")) {
+            LogUtils.d(TAG, "Skipping temporary file: $path")
+            return true
+        }
+        return false
+    }
+
+    private fun mergeInto(existing: AndroidArtifact?, parsed: AndroidArtifact): AndroidArtifact {
+        if (existing == null) {
+            return parsed
+        }
+        existing.results.addAll(parsed.results)
+        existing.detected.addAll(parsed.detected)
+        return existing
+    }
+
+    private fun finalizeArtifact(artifact: AndroidArtifact): Artifact {
+        artifact.stringResolver = stringResolver
+        indicators?.let { ind ->
+            ind.setStringResolver(stringResolver)
+            artifact.indicators = ind
+            artifact.checkIndicators()
+        }
+        return artifact
+    }
+
+    private fun collectFromDirectory(
+        root: File,
+        current: File,
+        results: LinkedHashMap<String, Artifact>,
+    ) {
+        val files = current.listFiles() ?: return
+        for (file in files) {
+            when {
+                file.isDirectory -> collectFromDirectory(root, file, results)
+                file.isFile -> {
+                    val relativePath = root.toPath()
+                        .relativize(file.toPath())
+                        .toString()
+                        .replace('\\', '/')
+                    analyzePath(relativePath) { file.inputStream() }?.let { artifact ->
+                        results[relativePath] = artifact
+                    }
+                }
+            }
+        }
     }
 
     companion object {
         private const val TAG = "ForensicRunner"
 
-        @JvmField
-        val MODULES_LIST: List<AndroidArtifact> = listOf(
-                // Bugreport modules
-                DumpsysAccessibility(),
-                DumpsysPackageActivities(),
-                DumpsysAdb(),
-                DumpsysAppops(),
-                DumpsysBatteryDaily(),
-                DumpsysBatteryHistory(),
-                DumpsysDBInfo(),
-                DumpsysPackages(),
-                DumpsysPlatformCompat(),
-                DumpsysReceivers(),
-                // AndroidQF modules
-                Packages(),
-                Processes(),
-                GetProp(),
-                Settings(),
-                Files(),
-                SMS(),
-                RootBinaries(),
-                Mounts(),
-                SELinux(),
-        )
+        @JvmStatic
+        fun findModuleIndices(path: String): List<Int> =
+            ArtifactModuleRegistry.findModuleIndices(path)
 
-        /** Map from file name to artifact instance, built from MODULES_LIST paths(). */
-        @JvmField
-        val MODULES_MAP: Map<String, Int> = run {
-            val map = mutableMapOf<String, Int>()
-            for ((index, module) in MODULES_LIST.withIndex()) {
-                for (path in module.paths()) {
-                    map[path] = index
-                }
-            }
-            map
-        }
-
+        /* 
+         * Files to skip when analyzing an aquisition.
+         */
         @JvmField
         val SKIP_FILES: List<String> = listOf(
             "env.txt",

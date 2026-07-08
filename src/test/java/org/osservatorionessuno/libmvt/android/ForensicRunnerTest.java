@@ -4,10 +4,15 @@ import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.common.Artifact;
 import org.osservatorionessuno.libmvt.common.Indicators;
 import org.osservatorionessuno.libmvt.common.JvmMapStringResolver;
+import org.osservatorionessuno.libmvt.common.ReopenableInput;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.nio.file.Paths;
+import java.util.List;
 import java.util.Map;
+
+import static org.osservatorionessuno.libmvt.ResourcesUtils.readResourceBytes;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -47,5 +52,73 @@ public class ForensicRunnerTest {
 
         assertNotNull(art);
         assertTrue(art.getResults().size() > 0);
+    }
+
+    @Test
+    public void testGlobPathMatching() {
+        assertFalse(ForensicRunner.findModuleIndices("FS/data/tombstones/tombstone_02.pb").isEmpty());
+        assertFalse(ForensicRunner.findModuleIndices("FS/data/tombstones/tombstone_01").isEmpty());
+        assertTrue(ForensicRunner.findModuleIndices("FS/data/tombstones/other_file.txt").isEmpty());
+        assertFalse(ForensicRunner.findModuleIndices("getprop.txt").isEmpty());
+        assertFalse(ForensicRunner.findModuleIndices("logs/anr_2026-03-28-01-20-41-432").isEmpty());
+    }
+
+    @Test
+    public void testGlobPathAnalysisFromDirectory() throws Exception {
+        File dir = Paths.get("src", "test", "resources", "android_data", "bugreport").toFile();
+
+        ForensicRunner runner = new ForensicRunner(new JvmMapStringResolver());
+        Map<String, Artifact> res = runner.streamLegacyAnalysisFromDirectory(dir);
+
+        assertTrue(res.containsKey("FS/data/tombstones/tombstone_01"));
+        Artifact tombstone = res.get("FS/data/tombstones/tombstone_01");
+        assertNotNull(tombstone);
+        assertTrue(tombstone.getResults().size() > 0);
+    }
+
+    @Test
+    public void testStreamFileAnalysisWithReopenableInput() throws Exception {
+        byte[] data = readResourceBytes("androidqf/dumpsys.txt");
+        ReopenableInput input = ReopenableInput.of(
+                "dumpsys.txt",
+                () -> new ByteArrayInputStream(data));
+
+        ForensicRunner runner = new ForensicRunner(new JvmMapStringResolver());
+        List<Integer> indices = ForensicRunner.findModuleIndices("dumpsys.txt");
+        assertTrue(indices.size() > 1);
+
+        Artifact art = runner.streamFileAnalysis(input);
+        assertNotNull(art);
+        assertTrue(art.getResults().size() > 0);
+    }
+
+    @Test
+    public void testStreamAnalysisWithReopenableInput() throws Exception {
+        byte[] getprop = readResourceBytes("androidqf/getprop.txt");
+        byte[] dumpsys = readResourceBytes("androidqf/dumpsys.txt");
+
+        ForensicRunner runner = new ForensicRunner(new JvmMapStringResolver());
+        Map<String, Artifact> res = runner.streamAnalysis(List.of(
+                ReopenableInput.of("getprop.txt", () -> new ByteArrayInputStream(getprop)),
+                ReopenableInput.of("dumpsys.txt", () -> new ByteArrayInputStream(dumpsys))
+        ));
+
+        assertTrue(res.containsKey("getprop.txt"));
+        assertTrue(res.get("getprop.txt").getResults().size() > 0);
+        assertTrue(res.containsKey("dumpsys.txt"));
+        assertTrue(res.get("dumpsys.txt").getResults().size() > 0);
+    }
+
+    @Test
+    public void testAnrAnalysisFromDirectory() throws Exception {
+        File dir = Paths.get("src", "test", "resources", "android_data", "bugreport").toFile();
+
+        ForensicRunner runner = new ForensicRunner(new JvmMapStringResolver());
+        Map<String, Artifact> res = runner.streamLegacyAnalysisFromDirectory(dir);
+
+        assertTrue(res.containsKey("FS/data/anr/anr_2026-03-28-01-20-41-432"));
+        Artifact anr = res.get("FS/data/anr/anr_2026-03-28-01-20-41-432");
+        assertNotNull(anr);
+        assertEquals(1, anr.getResults().size());
     }
 }

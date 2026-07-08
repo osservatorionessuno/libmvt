@@ -17,38 +17,57 @@ public class DumpsysAdb extends AndroidArtifact {
 
     @Override
     public List<String> paths() {
-        return List.of("dumpsys.txt");
+        return List.of("dumpsys.txt", "bugreport-*.txt");
     }
 
     @Override
     public void parse(AbstractInput artifactInput) throws Exception {
-        String content = collectText(artifactInput.inputStream);
         results.clear();
-        if (content.contains("Can't find service: adb")) return;
         Map<String, Object> res = new HashMap<>();
-        String[] lines = content.split("\n"); // use collectLines
-        for (int i = 0; i < lines.length; i++) {
-            String line = lines[i].trim();
-            if (line.startsWith("user_keys=")) {
-                String val = line.substring(10).trim();
-                List<Map<String, String>> info = new ArrayList<>();
-                info.add(calculateKeyInfo(val));
-                res.put("user_keys", info);
-            }
-            if (line.startsWith("keystore=")) {
-                String after = line.substring(9).trim();
-                if (after.startsWith("<?xml")) {
-                    StringBuilder xml = new StringBuilder(after).append('\n');
-                    for (int j = i + 1; j < lines.length; j++) {
-                        xml.append(lines[j]).append('\n');
-                        if (lines[j].contains("</keyStore>")) { i = j; break; }
-                    }
-                    res.put("keystore", parseXml(xml.toString()));
-                } else {
-                    res.put("keystore", List.of(after));
+        boolean[] inXml = {false};
+        StringBuilder[] xmlBuilder = {null};
+        Exception[] error = {null};
+
+        extractDumpsysSection(artifactInput.inputStream, "adb:", rawLine -> {
+            if (error[0] != null) return;
+            try {
+                String line = rawLine.trim();
+                if (line.startsWith("user_keys=")) {
+                    String val = line.substring(10).trim();
+                    List<Map<String, String>> info = new ArrayList<>();
+                    info.add(calculateKeyInfo(val));
+                    res.put("user_keys", info);
+                    return;
                 }
+                if (line.startsWith("keystore=")) {
+                    String after = line.substring(9).trim();
+                    if (after.startsWith("<?xml")) {
+                        inXml[0] = true;
+                        xmlBuilder[0] = new StringBuilder(after).append('\n');
+                        if (after.contains("</keyStore>")) {
+                            res.put("keystore", parseXml(xmlBuilder[0].toString()));
+                            inXml[0] = false;
+                            xmlBuilder[0] = null;
+                        }
+                    } else {
+                        res.put("keystore", List.of(after));
+                    }
+                    return;
+                }
+                if (inXml[0] && xmlBuilder[0] != null) {
+                    xmlBuilder[0].append(rawLine).append('\n');
+                    if (rawLine.contains("</keyStore>")) {
+                        res.put("keystore", parseXml(xmlBuilder[0].toString()));
+                        inXml[0] = false;
+                        xmlBuilder[0] = null;
+                    }
+                }
+            } catch (Exception e) {
+                error[0] = e;
             }
-        }
+        });
+
+        if (error[0] != null) throw error[0];
         results.add(res);
     }
 

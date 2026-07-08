@@ -1,3 +1,4 @@
+DUMP OF SERVICE accessibility:
 ACCESSIBILITY MANAGER (dumpsys accessibility)
 
 User state[attributes:{id=0, currentUser=true

@@ -19,13 +19,17 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class PackagesTest {
 
-    private static Packages parseAndroidQfPackages() throws Exception {
+    private static Packages parse(String path, InputStream data) throws Exception {
         Packages p = new Packages();
         p.setStringResolver(new JvmMapStringResolver());
-        try (InputStream data = ResourcesUtils.readResource("androidqf/packages.json")) {
-            p.parse(new AbstractInput("packages.json", data) {});
-        }
+        p.parse(new AbstractInput(path, data) {});
         return p;
+    }
+
+    private static Packages parseAndroidQfPackages() throws Exception {
+        try (InputStream data = ResourcesUtils.readResource("androidqf/packages.json")) {
+            return parse("packages.json", data);
+        }
     }
 
     private static boolean anyDetectionContextContains(List<Detection> detections, String needle, AlertLevel level) {
@@ -42,6 +46,18 @@ public class PackagesTest {
         Indicators indicators = new Indicators();
         indicators.loadFromDirectory(dir.toFile());
         return indicators;
+    }
+
+    @Test
+    public void testParsingProtobuf() throws Exception {
+        Packages p;
+        try (InputStream data = ResourcesUtils.readResource("androidqf/packages.pb")) {
+            p = parse("packages.pb", data);
+        }
+        assertEquals(7, p.getResults().size());
+        assertTrue(p.getResults().get(0).toString().contains("name=com.whatsapp"));
+        assertTrue(p.getResults().get(0).toString().contains(
+                "744ed47f8176ec423840344c33e88bd2c96e8988cda0797f3415bb5229efc12b"));
     }
 
     @Test

@@ -1,3 +1,4 @@
+DUMP OF SERVICE package:
 Verifiers:
   Required: com.android.vending (uid=10019)
 

@@ -19,7 +19,7 @@ public class DumpsysPackages extends AndroidArtifact {
 
     @Override
     public List<String> paths() {
-        return List.of("dumpsys.txt");
+        return List.of("dumpsys.txt", "bugreport-*.txt");
     }
 
     private static class PackageDetails {
@@ -163,15 +163,27 @@ public class DumpsysPackages extends AndroidArtifact {
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
         results.clear();
-        boolean inPackageList = false;
-        List<String> packageLines = new ArrayList<>();
-        for (String line : collectLines(artifactInput.inputStream)) {
-            if (line.startsWith("Packages:")) { inPackageList = true; continue; }
-            if (!inPackageList) continue;
-            if (line.trim().isEmpty()) break;
-            packageLines.add(line);
+        boolean[] inPackageList = { false };
+        boolean[] done = { false };
+        StringBuilder packageLines = new StringBuilder();
+
+        extractDumpsysSection(artifactInput.inputStream, "package:", line -> {
+            if (done[0]) return;
+            if (line.startsWith("Packages:")) {
+                inPackageList[0] = true;
+                return;
+            }
+            if (!inPackageList[0]) return;
+            if (line.trim().isEmpty()) {
+                done[0] = true;
+                return;
+            }
+            if (packageLines.length() > 0) packageLines.append('\n');
+            packageLines.append(line);
+        });
+        if (packageLines.length() > 0) {
+            results.addAll(parsePackages(packageLines.toString()));
         }
-        results.addAll(parsePackages(String.join("\n", packageLines)));
     }
 
     @Override

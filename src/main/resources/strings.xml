@@ -21,6 +21,8 @@
     <string name="mvt_dangerous_settings_message">%1$s is set to %2$s</string>
     <string name="mvt_tombstone_crashes_uid_title">Potentially suspicious crash</string>
     <string name="mvt_tombstone_crashes_uid_message">Potentially suspicious crash in process %1$s running as UID %2$s</string>
+    <string name="mvt_anr_package_name_title">Potentially suspicious ANR Crash</string>
+    <string name="mvt_anr_package_name_message">Potentially suspicious ANR Crash in process %1$s</string>
     <string name="mvt_files_suspicious_path_title">Suspicious file</string>
     <string name="mvt_files_suspicious_path_message">Found %1$sfile at suspicious path \"%2$s\"</string>
     <string name="mvt_packages_non_system_package_title">Package installed via adb or insecure method</string>
@@ -35,12 +37,14 @@
     <string name="mvt_packages_system_update_package_message">Found a system OTA update package disabled: %1$s</string>
     <string name="mvt_root_binaries_title">Root software</string>
     <string name="mvt_root_binaries_message">Found %1$s at %2$s</string>
-    <string name="mvt_dumpsys_receivers_intercept_outgoing_sms_title">Found a receiver to intercept outgoing SMS messages: %1$s</string>
-    <string name="mvt_dumpsys_receivers_intercept_incoming_sms_title">Found a receiver to intercept incoming SMS messages: %1$s</string>
-    <string name="mvt_dumpsys_receivers_intercept_data_sms_title">Found a receiver to intercept incoming data SMS messages: %1$s</string>
-    <string name="mvt_dumpsys_receivers_intercept_phone_state_title">Found a receiver monitoring telephony state/incoming calls: %1$s</string>
-    <string name="mvt_dumpsys_receivers_intercept_outgoing_call_title">Found a receiver monitoring outgoing calls: %1$s</string>
+    <string name="mvt_root_binaries_title">Root software</string>
+    <string name="mvt_root_binaries_message">Found %1$s at %2$s</string>
+    <string name="mvt_dumpsys_receivers_intercept_title">Found a component monitoring telephony</string>
+    <string name="mvt_dumpsys_receivers_intercept_outgoing_sms_message">Found a receiver to intercept outgoing SMS messages: %1$s</string>
+    <string name="mvt_dumpsys_receivers_intercept_incoming_sms_message">Found a receiver to intercept incoming SMS messages: %1$s</string>
+    <string name="mvt_dumpsys_receivers_intercept_data_sms_message">Found a receiver to intercept incoming data SMS messages: %1$s</string>
+    <string name="mvt_dumpsys_receivers_intercept_phone_state_message">Found a receiver monitoring telephony state/incoming calls: %1$s</string>
+    <string name="mvt_dumpsys_receivers_intercept_outgoing_call_message">Found a receiver monitoring outgoing calls: %1$s</string>
     <string name="mvt_selinux_status_title">SELinux status</string>
     <string name="mvt_selinux_status_message">SELinux is not being enforced: %1$s</string>
 </resources>
-
