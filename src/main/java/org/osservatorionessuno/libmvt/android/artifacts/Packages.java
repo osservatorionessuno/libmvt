@@ -214,22 +214,22 @@ public class Packages extends AndroidArtifact {
             }
 
             if ("null".equals(result.installer) && !result.system) {
-                detected.add(new Detection(DetectionType.PACKAGES_NON_SYSTEM_PACKAGE, result.name));
+                detected.add(new Detection(DetectionType.PACKAGES_ADB_INSTALLED, result.name));
             } else if (Utils.THIRD_PARTY_STORE_INSTALLERS.contains(result.installer)) {
-                detected.add(new Detection(DetectionType.PACKAGES_THIRD_PARTY_STORE_PACKAGE,
+                detected.add(new Detection(DetectionType.PACKAGES_THIRD_PARTY_STORE_INSTALLED,
                     result.installer, result.name));
             } else if (Utils.BROWSER_INSTALLERS.contains(result.installer)) {
-                detected.add(new Detection(DetectionType.PACKAGES_BROWSER_PACKAGE,
+                detected.add(new Detection(DetectionType.PACKAGES_BROWSER_INSTALLED,
                     result.installer, result.name));
             }
 
 
             if (Utils.SECURITY_PACKAGES.contains(result.name) && result.disabled) {
-                detected.add(new Detection(DetectionType.PACKAGES_SECURITY_PACKAGE, result.name));
+                detected.add(new Detection(DetectionType.PACKAGES_SECURITY_DISABLED, result.name));
             }
 
             if (Utils.SYSTEM_UPDATE_PACKAGES.contains(result.name) && result.disabled) {
-                detected.add(new Detection(DetectionType.PACKAGES_SYSTEM_UPDATE_PACKAGE, result.name));
+                detected.add(new Detection(DetectionType.PACKAGES_SYSTEM_UPDATE_DISABLED, result.name));
             }
 
             // Continnue instead of returning because we want to check indicators for all packages.
@@ -237,10 +237,10 @@ public class Packages extends AndroidArtifact {
 
             detected.addAll(indicators.matchString(result.name, IndicatorType.APP_ID));
             for (Map<String, Object> packageFile : result.files) {
-                detected.addAll(indicators.matchString((String) packageFile.get("path"), IndicatorType.FILE_PATH));
-                detected.addAll(indicators.matchString((String) packageFile.get("md5"), IndicatorType.FILE_HASH_MD5));
-                detected.addAll(indicators.matchString((String) packageFile.get("sha1"), IndicatorType.FILE_HASH_SHA1));
-                detected.addAll(indicators.matchString((String) packageFile.get("sha256"), IndicatorType.FILE_HASH_SHA256));
+                addPackageIocMatches(result.name, (String) packageFile.get("path"), IndicatorType.FILE_PATH);
+                addPackageIocMatches(result.name, (String) packageFile.get("md5"), IndicatorType.FILE_HASH_MD5);
+                addPackageIocMatches(result.name, (String) packageFile.get("sha1"), IndicatorType.FILE_HASH_SHA1);
+                addPackageIocMatches(result.name, (String) packageFile.get("sha256"), IndicatorType.FILE_HASH_SHA256);
 
                 Object certificatesObj = packageFile.get("certificates");
                 if (!(certificatesObj instanceof List<?> certList)) continue;
@@ -252,11 +252,26 @@ public class Packages extends AndroidArtifact {
                     Object sha1Obj = certAny.get("sha1");
                     Object sha256Obj = certAny.get("sha256");
 
-                    detected.addAll(indicators.matchString(md5Obj instanceof String ? (String) md5Obj : null, IndicatorType.APP_CERT_HASH_MD5));
-                    detected.addAll(indicators.matchString(sha1Obj instanceof String ? (String) sha1Obj : null, IndicatorType.APP_CERT_HASH_SHA1));
-                    detected.addAll(indicators.matchString(sha256Obj instanceof String ? (String) sha256Obj : null, IndicatorType.APP_CERT_HASH_SHA256));
+                    addPackageIocMatches(result.name,
+                            md5Obj instanceof String ? (String) md5Obj : null,
+                            IndicatorType.APP_CERT_HASH_MD5);
+                    addPackageIocMatches(result.name,
+                            sha1Obj instanceof String ? (String) sha1Obj : null,
+                            IndicatorType.APP_CERT_HASH_SHA1);
+                    addPackageIocMatches(result.name,
+                            sha256Obj instanceof String ? (String) sha256Obj : null,
+                            IndicatorType.APP_CERT_HASH_SHA256);
                 }
             }
+        }
+    }
+
+    private void addPackageIocMatches(String packageName, String matched, IndicatorType type) {
+        if (indicators == null || matched == null || matched.trim().isEmpty()) return;
+        for (Detection detection : indicators.matchString(matched, type)) {
+            List<String> value = new ArrayList<>(detection.getValue());
+            value.add(packageName);
+            detected.add(new Detection(DetectionType.IOC_MATCH, value));
         }
     }
 }

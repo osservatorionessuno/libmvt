@@ -14,7 +14,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
 
+import org.osservatorionessuno.libmvt.common.DetectionType;
+
 import static org.junit.jupiter.api.Assertions.*;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
 
 public class DumpsysPackagesTest {
 
@@ -58,7 +61,7 @@ public class DumpsysPackagesTest {
         dpa.setIndicators(indicators);
         dpa.checkIndicators();
 
-        assertTrue(dpa.detected.size() > 0);
+        assertDetectionValueContains(dpa.detected, DetectionType.IOC_MATCH, "com.sec.android.app.DataCreate");
     }
 
     @Test
@@ -67,6 +70,6 @@ public class DumpsysPackagesTest {
         String sample = "DUMP OF SERVICE package:\nPackages:\n  Package [com.topjohnwu.magisk] (test)\n    userId=0\n";
         dpa.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(sample.getBytes(StandardCharsets.UTF_8))) {});
         dpa.checkIndicators();
-        assertFalse(dpa.detected.isEmpty());
+        assertDetectionValueContains(dpa.detected, DetectionType.PACKAGES_ROOT_PACKAGE, "com.topjohnwu.magisk");
     }
 }

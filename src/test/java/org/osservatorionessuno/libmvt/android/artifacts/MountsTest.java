@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
+import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.JvmMapStringResolver;
 
 import java.io.InputStream;
@@ -11,6 +12,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetection;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
 
 public class MountsTest {
 
@@ -55,12 +58,12 @@ public class MountsTest {
         Mounts mounts = parse("mounts.json", ResourcesUtils.readResource("androidqf/mounts.json"));
         mounts.checkIndicators();
 
-        assertTrue(mounts.detected.stream().anyMatch(d ->
-                d.getLevel() == AlertLevel.HIGH && d.getContext().contains("/product")));
-        assertTrue(mounts.detected.stream().anyMatch(d ->
-                d.getLevel() == AlertLevel.LOW && d.getContext().contains("rw")));
-        assertTrue(mounts.detected.stream().anyMatch(d ->
-                d.getLevel() == AlertLevel.LOG && d.getContext().contains("/data")));
+        assertDetection(mounts.detected, DetectionType.MOUNTS_SYSTEM, AlertLevel.HIGH);
+        assertDetectionValueContains(mounts.detected, DetectionType.MOUNTS_SYSTEM, "/product");
+        assertDetection(mounts.detected, DetectionType.MOUNTS_SUSPICIOUS, AlertLevel.LOW);
+        assertDetectionValueContains(mounts.detected, DetectionType.MOUNTS_SUSPICIOUS, "rw");
+        assertDetection(mounts.detected, DetectionType.MOUNTS_DATA, AlertLevel.LOG);
+        assertDetectionValueContains(mounts.detected, DetectionType.MOUNTS_DATA, "/data");
     }
 
     @Test

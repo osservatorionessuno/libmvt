@@ -3,13 +3,15 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
-import org.osservatorionessuno.libmvt.common.AlertLevel;
+import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.JvmMapStringResolver;
 
 import java.io.InputStream;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionCount;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
 
 public class SettingsTest {
 
@@ -37,10 +39,8 @@ public class SettingsTest {
         settings.checkIndicators();
 
         assertEquals(2, settings.detected.size());
-        assertTrue(settings.detected.stream().allMatch(d -> d.getLevel() == AlertLevel.INFO));
-        assertTrue(settings.detected.stream().anyMatch(d ->
-                d.getContext().contains("accessibility_enabled")));
-        assertTrue(settings.detected.stream().anyMatch(d ->
-                d.getContext().contains("package_verifier_enable")));
+        assertDetectionCount(settings.detected, DetectionType.DANGEROUS_SETTINGS, 2);
+        assertDetectionValueContains(settings.detected, DetectionType.DANGEROUS_SETTINGS, "accessibility_enabled");
+        assertDetectionValueContains(settings.detected, DetectionType.DANGEROUS_SETTINGS, "package_verifier_enable");
     }
 }

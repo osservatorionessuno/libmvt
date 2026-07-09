@@ -8,7 +8,11 @@ import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import org.osservatorionessuno.libmvt.common.DetectionType;
+
 import static org.junit.jupiter.api.Assertions.*;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionCount;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
 
 public class DumpsysBatteryDailyTest {
 
@@ -44,6 +48,7 @@ public class DumpsysBatteryDailyTest {
         bd.setIndicators(ind);
         bd.checkIndicators();
 
-        assertEquals(1, bd.detected.size());
+        assertDetectionCount(bd.detected, DetectionType.IOC_MATCH, 1);
+        assertDetectionValueContains(bd.detected, DetectionType.IOC_MATCH, "com.facebook.katana");
     }
 }

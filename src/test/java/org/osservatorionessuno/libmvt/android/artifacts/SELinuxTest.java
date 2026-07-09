@@ -4,12 +4,16 @@ import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
+import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.JvmMapStringResolver;
 
 import java.io.InputStream;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetection;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValue;
 
 public class SELinuxTest {
 
@@ -46,7 +50,7 @@ public class SELinuxTest {
 
         selinux.checkIndicators();
         assertEquals(1, selinux.detected.size());
-        assertEquals(AlertLevel.HIGH, selinux.detected.get(0).getLevel());
-        assertTrue(selinux.detected.get(0).getContext().contains("permissive"));
+        assertDetection(selinux.detected, DetectionType.SELINUX_STATUS, AlertLevel.HIGH);
+        assertDetectionValue(selinux.detected, DetectionType.SELINUX_STATUS, List.of("permissive"));
     }
 }

@@ -223,7 +223,7 @@ public class Indicators {
         List<Detection> detections = new ArrayList<>();
         for (Emit e : trie.parseText(s)) {
             detections.add(new Detection(DetectionType.IOC_MATCH,
-                type.name(), e.getKeyword(), s));
+                type.name(), s));
         }
 
         return detections;

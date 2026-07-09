@@ -11,7 +11,12 @@ import java.nio.file.*;
 import java.util.List;
 import java.util.Map;
 
+import org.osservatorionessuno.libmvt.common.DetectionType;
+import org.osservatorionessuno.libmvt.common.AlertLevel;
+
 import static org.junit.jupiter.api.Assertions.*;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetection;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
 
 public class DumpsysAppopsTest {
 
@@ -70,6 +75,8 @@ public class DumpsysAppopsTest {
         da.setIndicators(indicators);
         da.checkIndicators();
 
-        assertTrue(da.detected.size() > 0);
+        assertDetectionValueContains(da.detected, DetectionType.IOC_MATCH, "com.facebook.katana");
+        assertDetection(da.detected, DetectionType.APPOPS_RISKY_PERMISSION, AlertLevel.MEDIUM);
+        assertDetectionValueContains(da.detected, DetectionType.APPOPS_RISKY_PERMISSION, "REQUEST_INSTALL_PACKAGES");
     }
 }

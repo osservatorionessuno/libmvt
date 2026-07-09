@@ -5,6 +5,7 @@ import org.osservatorionessuno.libmvt.android.ArtifactModuleRegistry;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
+import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Indicators;
 import org.osservatorionessuno.libmvt.common.JvmMapStringResolver;
 
@@ -13,6 +14,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetection;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
 
 public class ANRTest {
 
@@ -52,8 +55,7 @@ public class ANRTest {
         anr.checkIndicators();
 
         assertFalse(anr.detected.isEmpty());
-        assertTrue(anr.detected.stream().anyMatch(d -> d.getLevel() == AlertLevel.MEDIUM));
-        assertTrue(anr.detected.stream().anyMatch(d ->
-                d.getContext().contains("org.thoughtcrime.securesms")));
+        assertDetection(anr.detected, DetectionType.ANR, AlertLevel.MEDIUM);
+        assertDetectionValueContains(anr.detected, DetectionType.ANR, "org.thoughtcrime.securesms");
     }
 }

@@ -4,7 +4,6 @@ import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
-import org.osservatorionessuno.libmvt.common.Detection;
 import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Indicators;
 import org.osservatorionessuno.libmvt.common.JvmMapStringResolver;
@@ -16,6 +15,8 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValue;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
 
 public class PackagesTest {
 
@@ -30,18 +31,6 @@ public class PackagesTest {
         try (InputStream data = ResourcesUtils.readResource("androidqf/packages.json")) {
             return parse("packages.json", data);
         }
-    }
-
-    private static boolean anyDetectionValueContains(List<Detection> detections, String needle, AlertLevel level) {
-        if (detections == null) return false;
-        for (Detection d : detections) {
-            DetectionType type = DetectionType.fromId(d.getId());
-            if (type == null || !type.getLevel().equals(level)) continue;
-            for (String part : d.getValue()) {
-                if (part.contains(needle)) return true;
-            }
-        }
-        return false;
     }
 
     private static Indicators indicatorsFromJson(String json) throws Exception {
@@ -81,11 +70,11 @@ public class PackagesTest {
 
         assertEquals(5, p.detected.size());
 
-        assertTrue(anyDetectionValueContains(p.detected, "com.whatsapp", AlertLevel.HIGH));
-        assertTrue(anyDetectionValueContains(p.detected, "app.revanced.manager.flutter", AlertLevel.MEDIUM));
-        assertTrue(anyDetectionValueContains(p.detected, "org.nuclearfog.apollo", AlertLevel.INFO));
-        assertTrue(anyDetectionValueContains(p.detected, "com.google.android.packageinstaller", AlertLevel.MEDIUM));
-        assertTrue(anyDetectionValueContains(p.detected, "org.fdroid.fdroid", AlertLevel.INFO));
+        assertDetectionValueContains(p.detected, DetectionType.PACKAGES_ADB_INSTALLED, "com.whatsapp");
+        assertDetectionValueContains(p.detected, DetectionType.PACKAGES_BROWSER_INSTALLED, "app.revanced.manager.flutter");
+        assertDetectionValueContains(p.detected, DetectionType.PACKAGES_THIRD_PARTY_STORE_INSTALLED, "org.nuclearfog.apollo");
+        assertDetectionValueContains(p.detected, DetectionType.PACKAGES_BROWSER_INSTALLED, "com.google.android.packageinstaller");
+        assertDetectionValueContains(p.detected, DetectionType.PACKAGES_BROWSER_INSTALLED, "org.fdroid.fdroid");
     }
 
     @Test
@@ -99,8 +88,8 @@ public class PackagesTest {
         p.setIndicators(indicators);
         p.checkIndicators();
 
-        assertTrue(anyDetectionValueContains(p.detected, "APP_ID", AlertLevel.CRITICAL));
-        assertTrue(anyDetectionValueContains(p.detected, "com.malware.blah", AlertLevel.CRITICAL));
+        assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL, "APP_ID");
+        assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL, "com.malware.blah");
     }
 
     @Test
@@ -115,11 +104,13 @@ public class PackagesTest {
         p.setIndicators(indicators);
         p.checkIndicators();
 
-        assertTrue(anyDetectionValueContains(p.detected, "FILE_HASH_SHA256", AlertLevel.CRITICAL));
-        assertTrue(anyDetectionValueContains(p.detected, sha256, AlertLevel.CRITICAL));
-        
-        // TODO: Detection result does not contain the package name.
-        //assertTrue(anyDetectionContextContains(p.detected, "com.malware.muahaha", AlertLevel.CRITICAL));
+        assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL, "FILE_HASH_SHA256");
+        assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL, sha256);
+        assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL, "com.malware.muahaha");
+        assertDetectionValue(
+                p.detected,
+                DetectionType.IOC_MATCH,
+                List.of("FILE_HASH_SHA256", sha256, "com.malware.muahaha"));
     }
 
     @Test
@@ -134,10 +125,12 @@ public class PackagesTest {
         p.setIndicators(indicators);
         p.checkIndicators();
 
-        assertTrue(anyDetectionValueContains(p.detected, "APP_CERT_HASH_SHA256", AlertLevel.CRITICAL));
-        assertTrue(anyDetectionValueContains(p.detected, certSha256, AlertLevel.CRITICAL));
-        
-        // TODO: Detection result does not contain the package name.
-        //assertTrue(anyDetectionContextContains(p.detected, "com.malware.muahaha", AlertLevel.CRITICAL));
+        assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL, "APP_CERT_HASH_SHA256");
+        assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL, certSha256);
+        assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL, "com.malware.muahaha");
+        assertDetectionValue(
+                p.detected,
+                DetectionType.IOC_MATCH,
+                List.of("APP_CERT_HASH_SHA256", certSha256, "com.malware.muahaha"));
     }
 }

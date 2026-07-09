@@ -11,7 +11,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.Map;
 
+import org.osservatorionessuno.libmvt.common.DetectionType;
+
 import static org.junit.jupiter.api.Assertions.*;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
 
 public class ProcessesTest {
 
@@ -40,7 +43,7 @@ public class ProcessesTest {
         p.setIndicators(indicators);
         p.checkIndicators();
 
-        assertTrue(p.detected.size() > 0);
+        assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, "lru-add-drain");
     }
 
     @Test
