@@ -4,11 +4,14 @@ import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
+import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.JvmMapStringResolver;
 
 import java.io.InputStream;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetection;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
 
 public class RootBinariesTest {
 
@@ -47,8 +50,8 @@ public class RootBinariesTest {
         rb.checkIndicators();
 
         assertEquals(2, rb.detected.size());
-        assertEquals(AlertLevel.HIGH, rb.detected.get(0).getLevel());
-        assertTrue(rb.detected.get(0).getContext().contains("SuperUser binary"));
-        assertTrue(rb.detected.get(1).getContext().contains("unknown root file"));
+        assertDetection(rb.detected, DetectionType.ROOT_BINARIES, AlertLevel.HIGH);
+        assertDetectionValueContains(rb.detected, DetectionType.ROOT_BINARIES, "SuperUser binary");
+        assertDetectionValueContains(rb.detected, DetectionType.ROOT_BINARIES, "unknown root file");
     }
 }

@@ -9,7 +9,10 @@ import java.io.InputStream;
 import java.nio.file.Paths;
 import java.util.Map;
 
+import org.osservatorionessuno.libmvt.common.DetectionType;
+
 import static org.junit.jupiter.api.Assertions.*;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
 
 public class GetPropTest {
 
@@ -39,6 +42,6 @@ public class GetPropTest {
         gp.setIndicators(indicators);
         gp.checkIndicators();
 
-        assertTrue(gp.detected.size() > 0);
+        assertDetectionValueContains(gp.detected, DetectionType.IOC_MATCH, "dalvik.vm.appimageformat");
     }
 }

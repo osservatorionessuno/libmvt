@@ -18,12 +18,6 @@ enum class DetectionType(
     val titleKey: String,
     val contextKey: String,
 ) {
-    ROOT_BINARIES(
-        "root_binaries",
-        AlertLevel.HIGH,
-        "mvt_root_binaries_title",
-        "mvt_root_binaries_message",
-    ),
     IOC_MATCH(
         "ioc_match",
         AlertLevel.CRITICAL,
@@ -96,32 +90,32 @@ enum class DetectionType(
         "mvt_files_suspicious_path_title",
         "mvt_files_suspicious_path_message",
     ),
-    PACKAGES_NON_SYSTEM_PACKAGE(
-        "packages_non_system_package",
+    PACKAGES_ADB_INSTALLED(
+        "packages_adb_installed",
         AlertLevel.HIGH,
         "mvt_packages_non_system_package_title",
         "mvt_packages_non_system_package_message",
     ),
-    PACKAGES_THIRD_PARTY_STORE_PACKAGE(
-        "packages_third_party_store_package",
+    PACKAGES_THIRD_PARTY_STORE_INSTALLED(
+        "packages_third_party_store_installed",
         AlertLevel.INFO,
         "mvt_packages_third_party_store_package_title",
         "mvt_packages_third_party_store_package_message",
     ),
-    PACKAGES_BROWSER_PACKAGE(
-        "packages_browser_package",
+    PACKAGES_BROWSER_INSTALLED(
+        "packages_browser_installed",
         AlertLevel.MEDIUM,
         "mvt_packages_browser_package_title",
         "mvt_packages_browser_package_message",
     ),
-    PACKAGES_SECURITY_PACKAGE(
-        "packages_security_package",
+    PACKAGES_SECURITY_DISABLED(
+        "packages_security_disabled",
         AlertLevel.MEDIUM,
         "mvt_packages_security_package_title",
         "mvt_packages_security_package_message",
     ),
-    PACKAGES_SYSTEM_UPDATE_PACKAGE(
-        "packages_system_update_package",
+    PACKAGES_SYSTEM_UPDATE_DISABLED(
+        "packages_system_update_disabled",
         AlertLevel.MEDIUM,
         "mvt_packages_system_update_package_title",
         "mvt_packages_system_update_package_message",
@@ -156,11 +150,23 @@ enum class DetectionType(
         "mvt_dumpsys_receivers_intercept_outgoing_call_title",
         "mvt_dumpsys_receivers_intercept_outgoing_call_message",
     ),
+    ROOT_BINARIES(
+        "root_binaries",
+        AlertLevel.HIGH,
+        "mvt_root_binaries_title",
+        "mvt_root_binaries_message",
+    ),
     SELINUX_STATUS(
         "selinux_status",
         AlertLevel.HIGH,
         "mvt_selinux_status_title",
         "mvt_selinux_status_message",
+    ),
+    ANR(
+        "anr",
+        AlertLevel.MEDIUM,
+        "mvt_anr_package_name_title",
+        "mvt_anr_package_name_message",
     ),
     ;
 

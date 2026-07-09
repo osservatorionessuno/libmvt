@@ -22,6 +22,8 @@ import java.nio.file.Paths;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionCount;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
 
 public class DumpsysAccessibilityTest {
 
@@ -94,8 +96,7 @@ public class DumpsysAccessibilityTest {
         da.setIndicators(indicators);
         da.checkIndicators();
 
-        assertEquals(1, da.detected.size());
-        assertEquals(DetectionType.IOC_MATCH.getId(), da.detected.get(0).getId());
-        assertTrue(da.detected.get(0).getValue().stream().anyMatch(v -> v.contains("com.sec.android.app.camera")));
+        assertDetectionCount(da.detected, DetectionType.IOC_MATCH, 1);
+        assertDetectionValueContains(da.detected, DetectionType.IOC_MATCH, "com.sec.android.app.camera");
     }
 }

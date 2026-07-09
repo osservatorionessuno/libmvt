@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
+import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Indicators;
 import org.osservatorionessuno.libmvt.common.JvmMapStringResolver;
 import org.osservatorionessuno.libmvt.android.artifacts.Files;
@@ -15,6 +16,8 @@ import java.nio.file.Path;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetection;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
 
 public class FilesTest {
 
@@ -75,8 +78,8 @@ public class FilesTest {
         files.checkIndicators();
 
         assertEquals(1, files.detected.size());
-        assertEquals(AlertLevel.HIGH, files.detected.get(0).getLevel());
-        assertTrue(files.detected.get(0).getContext().contains("/data/local/tmp/evil"));
+        assertDetection(files.detected, DetectionType.FILES_SUSPICIOUS_PATH, AlertLevel.HIGH);
+        assertDetectionValueContains(files.detected, DetectionType.FILES_SUSPICIOUS_PATH, "/data/local/tmp/evil");
     }
 
     @Test
@@ -100,6 +103,7 @@ public class FilesTest {
         files.checkIndicators();
 
         assertEquals(1, files.detected.size());
-        assertEquals(AlertLevel.CRITICAL, files.detected.get(0).getLevel());
+        assertDetection(files.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL);
+        assertDetectionValueContains(files.detected, DetectionType.IOC_MATCH, sha256);
     }
 }

@@ -127,6 +127,7 @@ public class Files extends AndroidArtifact {
                 if (path.startsWith(suspicious)) {
                     String fileType = "";
 
+                    // Determine if the file is executable (Unix mode bits)
                     Object modeVal = file.get("mode");
                     long mode = 0;
                     if (modeVal instanceof Number) {
@@ -138,7 +139,8 @@ public class Files extends AndroidArtifact {
                             // ignore
                         }
                     }
-                    if ((mode & 0111) != 0) {
+                    // executable for owner, group, or others (octal 0100, 0010, 0001)
+                    if ((mode & 0111) != 0) { // (S_IXUSR | S_IXGRP | S_IXOTH)
                         fileType = "executable ";
                     }
 

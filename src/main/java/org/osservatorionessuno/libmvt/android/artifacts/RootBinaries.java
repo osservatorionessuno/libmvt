@@ -58,8 +58,11 @@ public class RootBinaries extends AndroidArtifact {
             String path = (String) obj;
             if (path == null || path.trim().isEmpty()) continue;
 
+            // Extract binary name from path
             String[] parts = path.replace("\\", "/").split("/");
             String binaryName = parts[parts.length - 1].toLowerCase();
+
+            // If a description is found, than the binary is known, otherwise it is unknown.
             String description = Utils.ROOT_BINARIES.get(binaryName);
             if (description == null) {
                 description = "unknown root file";

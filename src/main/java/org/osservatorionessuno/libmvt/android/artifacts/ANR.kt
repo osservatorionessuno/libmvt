@@ -1,10 +1,10 @@
 package org.osservatorionessuno.libmvt.android.artifacts
 
-import org.osservatorionessuno.libmvt.common.AlertLevel
 import org.osservatorionessuno.libmvt.common.AbstractInput
 import org.osservatorionessuno.libmvt.common.Detection
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType
 import org.osservatorionessuno.libmvt.common.logging.LogUtils
+import org.osservatorionessuno.libmvt.common.DetectionType
 
 /**
  * Parser for Android ANR files.
@@ -72,11 +72,7 @@ class ANR : AndroidArtifact() {
                 detected.addAll(indicators!!.matchString(name, IndicatorType.PROCESS))
             }
 
-            detected.add(Detection(AlertLevel.MEDIUM, getString("mvt_anr_package_name_title"),
-                String.format(
-                    getString("mvt_anr_package_name_message"),
-                    pkg ?: ""
-                )))
+            detected.add(Detection(DetectionType.ANR, pkg ?: ""))
         }
     }
 

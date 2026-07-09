@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.android.ArtifactModuleRegistry;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
+import org.osservatorionessuno.libmvt.common.AlertLevel;
+import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Indicators;
 import org.osservatorionessuno.libmvt.common.JvmMapStringResolver;
 
@@ -15,6 +17,8 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.osservatorionessuno.libmvt.ResourcesUtils.readResourceBytes;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetection;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
 
 public class TombstoneCrashesTest {
 
@@ -73,7 +77,7 @@ public class TombstoneCrashesTest {
         tc.checkIndicators();
 
         assertFalse(tc.detected.isEmpty());
-        assertTrue(tc.detected.stream().anyMatch(d ->
-                d.getContext().contains("mtk.ape.decoder")));
+        assertDetection(tc.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL);
+        assertDetectionValueContains(tc.detected, DetectionType.IOC_MATCH, "mtk.ape.decoder");
     }
 }
