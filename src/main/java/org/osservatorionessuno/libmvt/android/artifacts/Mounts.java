@@ -4,6 +4,7 @@ import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.Detection;
 import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
+import org.osservatorionessuno.libmvt.android.ProtobufRecords;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -30,22 +31,21 @@ public class Mounts extends AndroidArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
-        if (artifactInput.path.endsWith(".pb")) {
-            parseProtobuf(artifactInput.inputStream);
-            return;
-        } else if (artifactInput.path.endsWith(".json")) {
-            parseJson(artifactInput.inputStream);
-            return;
+        results.clear();
+        try {
+            parseByExtension(artifactInput, this::parseProtobuf, this::parseJson);
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException(e);
         }
-        throw new IOException("Unsupported file type: " + artifactInput.path);
     }
 
     private void parseProtobuf(InputStream input) throws IOException {
-        byte[] record;
-        while ((record = ProtobufRecords.readDelimited(input)) != null) {
+        ProtobufRecords.forEachDelimited(input, record -> {
             Map<String, Object> mount = parseMountEntry(ProtobufRecords.readStringRecord(record));
             if (mount != null) results.add(mount);
-        }
+        });
     }
 
     private void parseJson(InputStream input) throws IOException {
@@ -70,6 +70,7 @@ public class Mounts extends AndroidArtifact {
             }
         } catch (Exception ex) {
             // If malformed JSON or unexpected error - skip all
+            // TODO: maybe report a better error message (?)
             return;
         }
         return;

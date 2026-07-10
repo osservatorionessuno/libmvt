@@ -1,12 +1,10 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.junit.jupiter.api.Test;
-import org.osservatorionessuno.libmvt.android.ArtifactModuleRegistry;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.DetectionType;
-import org.osservatorionessuno.libmvt.common.Indicators;
 import org.osservatorionessuno.libmvt.common.JvmMapStringResolver;
 
 import java.io.InputStream;
@@ -16,6 +14,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetection;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.runIocCheck;
 
 public class ANRTest {
 
@@ -48,11 +47,7 @@ public class ANRTest {
             anr.parse(new AbstractInput("FS/data/anr/anr_2026-03-28-01-20-41-432", data) {});
         }
 
-        Indicators indicators = new Indicators();
-        indicators.loadFromDirectory(
-                java.nio.file.Paths.get("src", "test", "resources", "iocs").toFile());
-        anr.setIndicators(indicators);
-        anr.checkIndicators();
+        runIocCheck(anr);
 
         assertFalse(anr.detected.isEmpty());
         assertDetection(anr.detected, DetectionType.ANR, AlertLevel.MEDIUM);

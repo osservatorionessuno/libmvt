@@ -42,16 +42,16 @@ public class GetProp extends AndroidArtifact {
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
         results.clear();
-        for (String line : collectLines(artifactInput.inputStream)) {
+        forEachLine(artifactInput.inputStream, line -> {
             line = line.trim();
-            if (line.isEmpty()) continue;
+            if (line.isEmpty()) return;
             Matcher m = PATTERN.matcher(line);
-            if (!m.find() || m.groupCount() < 2) continue;
+            if (!m.find() || m.groupCount() < 2) return;
             Map<String, String> entry = new HashMap<>();
             entry.put("name", m.group(1));
             entry.put("value", m.group(2));
             results.add(entry);
-        }
+        });
     }
 
     @Override

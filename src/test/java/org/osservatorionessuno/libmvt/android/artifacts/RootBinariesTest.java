@@ -2,29 +2,20 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
-import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.DetectionType;
-import org.osservatorionessuno.libmvt.common.JvmMapStringResolver;
-
-import java.io.InputStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetection;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.parseAndroidArtifact;
 
 public class RootBinariesTest {
 
-    private static RootBinaries parse(String path, InputStream data) throws Exception {
-        RootBinaries rb = new RootBinaries();
-        rb.setStringResolver(new JvmMapStringResolver());
-        rb.parse(new AbstractInput(path, data) {});
-        return rb;
-    }
-
     @Test
     public void testParsingJson() throws Exception {
-        RootBinaries rb = parse(
+        RootBinaries rb = parseAndroidArtifact(
+                RootBinaries::new,
                 "root_binaries.json",
                 ResourcesUtils.readResource("androidqf/root_binaries.json"));
         assertEquals(2, rb.getResults().size());
@@ -34,7 +25,8 @@ public class RootBinariesTest {
 
     @Test
     public void testParsingProtobuf() throws Exception {
-        RootBinaries rb = parse(
+        RootBinaries rb = parseAndroidArtifact(
+                RootBinaries::new,
                 "root_binaries.pb",
                 ResourcesUtils.readResource("androidqf/root_binaries.pb"));
         assertEquals(2, rb.getResults().size());
@@ -44,7 +36,8 @@ public class RootBinariesTest {
 
     @Test
     public void testKnownAndUnknownBinaries() throws Exception {
-        RootBinaries rb = parse(
+        RootBinaries rb = parseAndroidArtifact(
+                RootBinaries::new,
                 "root_binaries.json",
                 ResourcesUtils.readResource("androidqf/root_binaries.json"));
         rb.checkIndicators();

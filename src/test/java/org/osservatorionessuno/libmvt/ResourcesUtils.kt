@@ -1,6 +1,7 @@
 package org.osservatorionessuno.libmvt
 
 import java.io.IOException
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -22,6 +23,13 @@ object ResourcesUtils {
     fun readResource(name: String): InputStream {
         val path: Path = Paths.get("src", "test", "resources", name)
         return Files.newInputStream(path)
+    }
+
+    @JvmStatic
+    @Throws(IOException::class)
+    fun readResourceString(name: String): String {
+        val path: Path = Paths.get("src", "test", "resources", name)
+        return Files.readString(path, StandardCharsets.UTF_8)
     }
 
     @JvmStatic

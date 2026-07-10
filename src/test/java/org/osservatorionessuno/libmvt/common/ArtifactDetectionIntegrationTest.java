@@ -8,7 +8,6 @@ import org.osservatorionessuno.libmvt.android.artifacts.GetProp;
 import org.osservatorionessuno.libmvt.android.artifacts.RootBinaries;
 
 import java.io.InputStream;
-import java.nio.file.Paths;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.loadTestIndicators;
 
 public class ArtifactDetectionIntegrationTest {
 
@@ -33,11 +33,7 @@ public class ArtifactDetectionIntegrationTest {
         try (InputStream data = ResourcesUtils.readResource("androidqf/getprop.txt")) {
             getProp.parse(new AbstractInput("getprop.txt", data) {});
         }
-        Indicators indicators = new Indicators();
-        indicators.loadFromDirectory(
-                Paths.get("src", "test", "resources", "iocs").toFile()
-        );
-        getProp.setIndicators(indicators);
+        getProp.setIndicators(loadTestIndicators());
         getProp.checkIndicators();
 
         assertDetectionValueContains(

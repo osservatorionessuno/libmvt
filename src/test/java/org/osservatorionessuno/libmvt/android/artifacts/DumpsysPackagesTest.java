@@ -1,44 +1,24 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.junit.jupiter.api.Test;
+import org.osservatorionessuno.libmvt.ResourcesUtils;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
-import org.osservatorionessuno.libmvt.common.Indicators;
-import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
-
-import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
-import java.io.FileInputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Map;
-
 import org.osservatorionessuno.libmvt.common.DetectionType;
+
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.runIocCheck;
 
 public class DumpsysPackagesTest {
-
-    private String readResource(String name) throws Exception {
-        Path path = Paths.get("src", "test", "resources", name);
-        StringBuilder sb = new StringBuilder(8192);
-        try (BufferedReader br = new BufferedReader(
-                new InputStreamReader(new FileInputStream(path.toFile()), StandardCharsets.UTF_8))) {
-            char[] buf = new char[4096];
-            int n;
-            while ((n = br.read(buf)) >= 0) {
-                sb.append(buf, 0, n);
-            }
-        }
-        return sb.toString();
-    }
 
     @Test
     public void testParsing() throws Exception {
         DumpsysPackages dpa = new DumpsysPackages();
-        String data = readResource("android_data/dumpsys_packages.txt");
+        String data = ResourcesUtils.readResourceString("android_data/dumpsys_packages.txt");
         dpa.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
         assertEquals(2, dpa.getResults().size());
 
@@ -51,15 +31,10 @@ public class DumpsysPackagesTest {
     @Test
     public void testIocCheck() throws Exception {
         DumpsysPackages dpa = new DumpsysPackages();
-        String data = readResource("android_data/dumpsys_packages.txt");
+        String data = ResourcesUtils.readResourceString("android_data/dumpsys_packages.txt");
         dpa.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
 
-        Indicators indicators = new Indicators();
-        indicators.loadFromDirectory(
-                Paths.get("src", "test", "resources", "iocs").toFile()
-        );
-        dpa.setIndicators(indicators);
-        dpa.checkIndicators();
+        runIocCheck(dpa);
 
         assertDetectionValueContains(dpa.detected, DetectionType.IOC_MATCH, "com.sec.android.app.DataCreate");
     }

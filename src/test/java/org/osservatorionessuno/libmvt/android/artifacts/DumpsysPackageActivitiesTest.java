@@ -3,13 +3,12 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
-import org.osservatorionessuno.libmvt.common.Indicators;
 
 import java.io.InputStream;
-import java.nio.file.Paths;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.runIocCheck;
 
 public class DumpsysPackageActivitiesTest {
 
@@ -32,12 +31,7 @@ public class DumpsysPackageActivitiesTest {
         InputStream data = ResourcesUtils.readResource("android_data/dumpsys_packages.txt");
         dpa.parse(new AbstractInput("dumpsys.txt", data) {});
 
-        Indicators ind = new Indicators();
-        ind.loadFromDirectory(
-                Paths.get("src", "test", "resources", "iocs").toFile()
-        );
-        dpa.setIndicators(ind);
-        dpa.checkIndicators();
+        runIocCheck(dpa);
 
         assertEquals(0, dpa.detected.size());
     }

@@ -28,6 +28,24 @@ abstract class AndroidArtifact : Artifact() {
     protected fun collectLines(content: InputStream): List<String> {
         return content.bufferedReader(Charsets.UTF_8).useLines { it.toList() }
     }
+        
+    @Throws(Exception::class)
+    protected fun parseByExtension(
+        artifactInput: org.osservatorionessuno.libmvt.common.AbstractInput,
+        pb: StreamParser,
+        json: StreamParser,
+    ) {
+        when {
+            artifactInput.path.endsWith(".pb") -> pb.parse(artifactInput.inputStream)
+            artifactInput.path.endsWith(".json") -> json.parse(artifactInput.inputStream)
+            else -> throw IOException("Unsupported file type: ${artifactInput.path}")
+        }
+    }
+
+    fun interface StreamParser {
+        @Throws(Exception::class)
+        fun parse(input: InputStream)
+    }
 
     // Kotlin version of forEachLine
     @Throws(IOException::class)

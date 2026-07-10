@@ -1,4 +1,4 @@
-package org.osservatorionessuno.libmvt.android.artifacts
+package org.osservatorionessuno.libmvt.android
 
 import com.google.protobuf.CodedInputStream
 import java.io.EOFException
@@ -21,6 +21,20 @@ object ProtobufRecords {
             offset += read
         }
         return record
+    }
+
+    @JvmStatic
+    @Throws(IOException::class)
+    fun forEachDelimited(input: InputStream, block: RecordConsumer) {
+        while (true) {
+            val record = readDelimited(input) ?: break
+            block.accept(record)
+        }
+    }
+
+    fun interface RecordConsumer {
+        @Throws(IOException::class)
+        fun accept(record: ByteArray)
     }
 
     @JvmStatic

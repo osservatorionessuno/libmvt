@@ -24,10 +24,10 @@ public class Processes extends AndroidArtifact {
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
         results.clear();
-        for (String line : collectLines(artifactInput.inputStream)) {
-            if (line.startsWith("USER")) continue; // Skip header line
+        forEachLine(artifactInput.inputStream, line -> {
+            if (line.startsWith("USER")) return; // Skip header line
             line = line.trim();
-            if (line.isEmpty()) continue;
+            if (line.isEmpty()) return;
             String[] parts = line.split("\\s+");
             // Sometimes WCHAN is empty or label present; adjust length
             if (parts.length == 8) {
@@ -62,7 +62,7 @@ public class Processes extends AndroidArtifact {
             rec.put("proc_name", parts[8].replace("[", "").replace("]", ""));
             rec.put("label", label);
             results.add(rec);
-        }
+        });
     }
 
     @Override

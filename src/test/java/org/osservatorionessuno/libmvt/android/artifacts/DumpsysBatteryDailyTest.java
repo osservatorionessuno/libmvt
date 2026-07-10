@@ -1,36 +1,24 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.junit.jupiter.api.Test;
+import org.osservatorionessuno.libmvt.ResourcesUtils;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
-import org.osservatorionessuno.libmvt.common.Indicators;
+import org.osservatorionessuno.libmvt.common.DetectionType;
 
-import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
-import org.osservatorionessuno.libmvt.common.DetectionType;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionCount;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.runIocCheck;
 
 public class DumpsysBatteryDailyTest {
-
-    private String readResource(String name) throws Exception {
-        Path path = Paths.get("src", "test", "resources", name);
-        StringBuilder sb = new StringBuilder(8192);
-        try (BufferedReader br = java.nio.file.Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
-            char[] buf = new char[4096];
-            int n;
-            while ((n = br.read(buf)) >= 0) sb.append(buf, 0, n);
-        }
-        return sb.toString();
-    }
 
     @Test
     public void testParsing() throws Exception {
         DumpsysBatteryDaily bd = new DumpsysBatteryDaily();
-        String data = readResource("android_data/dumpsys_battery.txt");
+        String data = ResourcesUtils.readResourceString("android_data/dumpsys_battery.txt");
         bd.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
         assertEquals(3, bd.getResults().size());
     }
@@ -38,15 +26,10 @@ public class DumpsysBatteryDailyTest {
     @Test
     public void testIocCheck() throws Exception {
         DumpsysBatteryDaily bd = new DumpsysBatteryDaily();
-        String data = readResource("android_data/dumpsys_battery.txt");
+        String data = ResourcesUtils.readResourceString("android_data/dumpsys_battery.txt");
         bd.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
 
-        Indicators ind = new Indicators();
-        ind.loadFromDirectory(
-                Paths.get("src", "test", "resources", "iocs").toFile()
-        );
-        bd.setIndicators(ind);
-        bd.checkIndicators();
+        runIocCheck(bd);
 
         assertDetectionCount(bd.detected, DetectionType.IOC_MATCH, 1);
         assertDetectionValueContains(bd.detected, DetectionType.IOC_MATCH, "com.facebook.katana");

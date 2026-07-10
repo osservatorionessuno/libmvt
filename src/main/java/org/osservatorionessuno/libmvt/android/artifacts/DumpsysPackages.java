@@ -15,12 +15,7 @@ import java.io.InputStream;
 /**
  * Parser for dumpsys package information.
  */
-public class DumpsysPackages extends AndroidArtifact {
-
-    @Override
-    public List<String> paths() {
-        return List.of("dumpsys.txt", "bugreport-*.txt");
-    }
+public class DumpsysPackages extends DumpsysArtifact {
 
     private static class PackageDetails {
         String packageName = "";
@@ -48,6 +43,20 @@ public class DumpsysPackages extends AndroidArtifact {
         return m;
     }
 
+    private static Map<String, Object> parsePermissionLine(String line, String type) {
+        String[] lineinfo = line.trim().split(":", 2);
+        String permission = lineinfo[0];
+        Boolean granted = null;
+        if (lineinfo.length > 1 && lineinfo[1].contains("granted=")) {
+            granted = lineinfo[1].contains("granted=true");
+        }
+        Map<String, Object> p = new HashMap<>();
+        p.put("name", permission);
+        p.put("granted", granted);
+        p.put("type", type);
+        return p;
+    }
+
     static PackageDetails parsePackageBlock(List<String> lines) {
         PackageDetails d = new PackageDetails();
         boolean inInstall = false, inRuntime = false, inDeclared = false, inRequested = true;
@@ -56,16 +65,7 @@ public class DumpsysPackages extends AndroidArtifact {
                 if (line.startsWith("    ") && !line.startsWith("      ")) {
                     inInstall = false;
                 } else {
-                    String[] lineinfo = line.trim().split(":", 2);
-                    String permission = lineinfo[0];
-                    Boolean granted = null;
-                    if (lineinfo.length > 1 && lineinfo[1].contains("granted=")) {
-                        granted = lineinfo[1].contains("granted=true");
-                    }
-                    Map<String, Object> p = new HashMap<>();
-                    p.put("name", permission);
-                    p.put("granted", granted);
-                    p.put("type", "install");
+                    Map<String, Object> p = parsePermissionLine(line, "install");
                     d.permissions.add(p);
                     continue;
                 }
@@ -74,16 +74,7 @@ public class DumpsysPackages extends AndroidArtifact {
                 if (!line.startsWith("        ")) {
                     inRuntime = false;
                 } else {
-                    String[] lineinfo = line.trim().split(":", 2);
-                    String permission = lineinfo[0];
-                    Boolean granted = null;
-                    if (lineinfo.length > 1 && lineinfo[1].contains("granted=")) {
-                        granted = lineinfo[1].contains("granted=true");
-                    }
-                    Map<String, Object> p = new HashMap<>();
-                    p.put("name", permission);
-                    p.put("granted", granted);
-                    p.put("type", "runtime");
+                    Map<String, Object> p = parsePermissionLine(line, "runtime");
                     d.permissions.add(p);
                     continue;
                 }

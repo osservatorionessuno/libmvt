@@ -7,12 +7,7 @@ import java.util.*;
 import java.io.IOException;
 
 /** Parser for dumpsys platform_compat output. */
-public class DumpsysPlatformCompat extends AndroidArtifact {
-
-    @Override
-    public List<String> paths() {
-        return List.of("dumpsys.txt", "bugreport-*.txt");
-    }
+public class DumpsysPlatformCompat extends DumpsysArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {

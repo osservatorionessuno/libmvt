@@ -9,12 +9,7 @@ import java.util.regex.Pattern;
 import java.io.InputStream;
 import java.io.IOException;
 
-public class DumpsysAccessibility extends AndroidArtifact {
-
-    @Override
-    public List<String> paths() {
-        return List.of("dumpsys.txt", "bugreport-*.txt");
-    }
+public class DumpsysAccessibility extends DumpsysArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {

@@ -12,13 +12,7 @@ import java.io.InputStream;
 import java.io.IOException;
 
 /** Parser for dumpsys adb output. */
-public class DumpsysAdb extends AndroidArtifact {
-    private static final Set<String> MULTILINE = Set.of("user_keys", "keystore");
-
-    @Override
-    public List<String> paths() {
-        return List.of("dumpsys.txt", "bugreport-*.txt");
-    }
+public class DumpsysAdb extends DumpsysArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws Exception {
@@ -74,56 +68,6 @@ public class DumpsysAdb extends AndroidArtifact {
     @SuppressWarnings("unchecked")
     private Map<String, Object> cast(Object o) {
         return (Map<String, Object>) o;
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> indentedDumpParser(String data) {
-        Map<String, Object> root = new HashMap<>();
-        Deque<Object> stack = new ArrayDeque<>();
-        stack.push(root);
-        int curIndent = 0;
-        boolean inMultiline = false;
-        for (String rawLine : data.split("\n")) {
-            String line = rawLine.replaceAll("\r", "");
-            int indent = line.length() - line.stripLeading().length();
-            if (indent < curIndent) {
-                while (curIndent > indent && stack.size() > 1) {
-                    stack.pop();
-                    curIndent -= 2;
-                }
-                curIndent = indent;
-            } else {
-                curIndent = indent;
-            }
-            String[] parts = line.stripLeading().split("=", 2);
-            String key = parts[0];
-            Object current = stack.peek();
-            if (inMultiline) {
-                if (key.isEmpty()) {
-                    inMultiline = false;
-                    stack.pop();
-                } else {
-                    ((List<String>) current).add(line.strip());
-                }
-                continue;
-            }
-            if (key.equals("}")) { stack.pop(); continue; }
-            String value = parts.length > 1 ? parts[1] : "";
-            if ("{".equals(value)) {
-                Map<String, Object> map = new HashMap<>();
-                ((Map<String, Object>) current).put(key, map);
-                stack.push(map);
-            } else if (MULTILINE.contains(key)) {
-                List<String> list = new ArrayList<>();
-                list.add(value);
-                ((Map<String, Object>) current).put(key, list);
-                stack.push(list);
-                inMultiline = true;
-            } else {
-                ((Map<String, Object>) current).put(key, value);
-            }
-        }
-        return root;
     }
 
     private List<Map<String, String>> parseXml(String xml) throws Exception {

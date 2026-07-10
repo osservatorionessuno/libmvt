@@ -3,16 +3,14 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
-import org.osservatorionessuno.libmvt.common.Indicators;
-
-import java.io.InputStream;
-import java.nio.file.Paths;
-import java.util.Map;
-
 import org.osservatorionessuno.libmvt.common.DetectionType;
 
-import static org.junit.jupiter.api.Assertions.*;
+import java.io.InputStream;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.runIocCheck;
 
 public class GetPropTest {
 
@@ -35,12 +33,7 @@ public class GetPropTest {
         InputStream data = ResourcesUtils.readResource("android_data/getprop.txt");
         gp.parse(new AbstractInput("getprop.txt", data) {});
 
-        Indicators indicators = new Indicators();
-        indicators.loadFromDirectory(
-                Paths.get("src", "test", "resources", "iocs").toFile()
-        );
-        gp.setIndicators(indicators);
-        gp.checkIndicators();
+        runIocCheck(gp);
 
         assertDetectionValueContains(gp.detected, DetectionType.IOC_MATCH, "dalvik.vm.appimageformat");
     }

@@ -2,50 +2,32 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
-import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Indicators;
-import org.osservatorionessuno.libmvt.common.JvmMapStringResolver;
 
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValue;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.indicatorsFromJson;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.parseAndroidArtifact;
 
 public class PackagesTest {
 
-    private static Packages parse(String path, InputStream data) throws Exception {
-        Packages p = new Packages();
-        p.setStringResolver(new JvmMapStringResolver());
-        p.parse(new AbstractInput(path, data) {});
-        return p;
-    }
-
     private static Packages parseAndroidQfPackages() throws Exception {
         try (InputStream data = ResourcesUtils.readResource("androidqf/packages.json")) {
-            return parse("packages.json", data);
+            return parseAndroidArtifact(Packages::new, "packages.json", data);
         }
-    }
-
-    private static Indicators indicatorsFromJson(String json) throws Exception {
-        Path dir = Files.createTempDirectory("mvt-iocs-");
-        Files.writeString(dir.resolve("iocs.json"), json, StandardCharsets.UTF_8);
-        Indicators indicators = new Indicators();
-        indicators.loadFromDirectory(dir.toFile());
-        return indicators;
     }
 
     @Test
     public void testParsingProtobuf() throws Exception {
         Packages p;
         try (InputStream data = ResourcesUtils.readResource("androidqf/packages.pb")) {
-            p = parse("packages.pb", data);
+            p = parseAndroidArtifact(Packages::new, "packages.pb", data);
         }
         assertEquals(7, p.getResults().size());
         assertTrue(p.getResults().get(0).toString().contains("name=com.whatsapp"));
