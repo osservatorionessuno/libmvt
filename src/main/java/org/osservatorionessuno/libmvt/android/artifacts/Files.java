@@ -2,6 +2,7 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 
 import com.google.protobuf.CodedInputStream;
 import org.json.JSONException;
+import org.osservatorionessuno.libmvt.android.ProtobufRecords;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.Detection;
 import org.osservatorionessuno.libmvt.common.DetectionType;
@@ -34,23 +35,22 @@ public class Files extends AndroidArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
-        if (artifactInput.path.endsWith(".pb")) {
-            parseProtobuf(artifactInput.inputStream);
-            return;
-        } else if (artifactInput.path.endsWith(".json")) {
-            parseJson(artifactInput.inputStream);
-            return;
+        results.clear();
+        try {
+            parseByExtension(artifactInput, this::parseProtobuf, this::parseJson);
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException(e);
         }
-        throw new IOException("Unsupported file type: " + artifactInput.path);
     }
 
     private void parseProtobuf(InputStream input) throws IOException {
-        byte[] record;
-        while ((record = ProtobufRecords.readDelimited(input)) != null) {
+        ProtobufRecords.forEachDelimited(input, record -> {
             CodedInputStream codedInput = CodedInputStream.newInstance(record);
             Map<String, Object> file = parseFileRecord(codedInput);
             results.add(file);
-        }
+        });
     }
 
     private Map<String, Object> parseFileRecord(CodedInputStream input) throws IOException {

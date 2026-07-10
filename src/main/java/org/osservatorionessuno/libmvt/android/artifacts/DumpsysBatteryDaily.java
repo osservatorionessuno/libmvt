@@ -7,12 +7,7 @@ import java.util.*;
 import java.io.IOException;
 
 /** Parser for dumpsys battery daily output. */
-public class DumpsysBatteryDaily extends AndroidArtifact {
-
-    @Override
-    public List<String> paths() {
-        return List.of("dumpsys.txt", "bugreport-*.txt");
-    }
+public class DumpsysBatteryDaily extends DumpsysArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {

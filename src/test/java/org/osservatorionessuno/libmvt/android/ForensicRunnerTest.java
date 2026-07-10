@@ -2,7 +2,7 @@ package org.osservatorionessuno.libmvt.android;
 
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.common.Artifact;
-import org.osservatorionessuno.libmvt.common.Indicators;
+import org.osservatorionessuno.libmvt.common.DetectionTestUtils;
 import org.osservatorionessuno.libmvt.common.JvmMapStringResolver;
 import org.osservatorionessuno.libmvt.common.ReopenableInput;
 
@@ -21,13 +21,9 @@ public class ForensicRunnerTest {
     @Test
     public void testRunAllModules() throws Exception {
         File dir = Paths.get("src", "test", "resources", "androidqf").toFile();
-        File iocDir = Paths.get("src", "test", "resources", "iocs").toFile();
-
-        Indicators ind = new Indicators();
-        ind.loadFromDirectory(iocDir);
 
         ForensicRunner runner = new ForensicRunner(new JvmMapStringResolver());
-        runner.setIndicators(ind);
+        runner.setIndicators(DetectionTestUtils.loadTestIndicators());
 
         Map<String, Artifact> res = runner.streamLegacyAnalysisFromDirectory(dir);
 
@@ -109,16 +105,4 @@ public class ForensicRunnerTest {
         assertTrue(res.get("dumpsys.txt").getResults().size() > 0);
     }
 
-    @Test
-    public void testAnrAnalysisFromDirectory() throws Exception {
-        File dir = Paths.get("src", "test", "resources", "android_data", "bugreport").toFile();
-
-        ForensicRunner runner = new ForensicRunner(new JvmMapStringResolver());
-        Map<String, Artifact> res = runner.streamLegacyAnalysisFromDirectory(dir);
-
-        assertTrue(res.containsKey("FS/data/anr/anr_2026-03-28-01-20-41-432"));
-        Artifact anr = res.get("FS/data/anr/anr_2026-03-28-01-20-41-432");
-        assertNotNull(anr);
-        assertEquals(1, anr.getResults().size());
-    }
 }

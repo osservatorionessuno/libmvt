@@ -2,15 +2,12 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
-import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Indicators;
-import org.osservatorionessuno.libmvt.common.JvmMapStringResolver;
 import org.osservatorionessuno.libmvt.android.artifacts.Files;
 
 import java.io.ByteArrayInputStream;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Map;
@@ -18,19 +15,14 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetection;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.parseAndroidArtifact;
 
 public class FilesTest {
 
-    private static Files parse(String path, InputStream data) throws Exception {
-        Files files = new Files();
-        files.setStringResolver(new JvmMapStringResolver());
-        files.parse(new AbstractInput(path, data) {});
-        return files;
-    }
-
     @Test
     public void testParsingJson() throws Exception {
-        Files files = parse(
+        Files files = parseAndroidArtifact(
+                Files::new,
                 "files.json",
                 ResourcesUtils.readResource("androidqf/files.json"));
         assertEquals(3, files.getResults().size());
@@ -42,7 +34,8 @@ public class FilesTest {
 
     @Test
     public void testParsingProtobuf() throws Exception {
-        Files files = parse(
+        Files files = parseAndroidArtifact(
+                Files::new,
                 "files.pb",
                 ResourcesUtils.readResource("androidqf/files.pb"));
         assertEquals(3, files.getResults().size());
@@ -71,7 +64,8 @@ public class FilesTest {
         String json = """
                 [{"path":"/data/local/tmp/evil","mode":"-rwxr-xr-x","size":123}]
                 """;
-        Files files = parse(
+        Files files = parseAndroidArtifact(
+                Files::new,
                 "files.json",
                 new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8)));
         files.setIndicators(emptyIndicators());
@@ -88,7 +82,8 @@ public class FilesTest {
         String json = String.format(
                 "[{\"path\":\"/system/app/sample\",\"sha256\":\"%s\"}]",
                 sha256);
-        Files files = parse(
+        Files files = parseAndroidArtifact(
+                Files::new,
                 "files.json",
                 new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8)));
 

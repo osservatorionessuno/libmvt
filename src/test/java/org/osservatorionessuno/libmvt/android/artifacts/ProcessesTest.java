@@ -3,18 +3,16 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
-import org.osservatorionessuno.libmvt.common.Indicators;
+import org.osservatorionessuno.libmvt.common.DetectionType;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Paths;
 import java.util.Map;
-
-import org.osservatorionessuno.libmvt.common.DetectionType;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.runIocCheck;
 
 public class ProcessesTest {
 
@@ -36,12 +34,7 @@ public class ProcessesTest {
         InputStream data = ResourcesUtils.readResource("android_data/ps.txt");
         p.parse(new AbstractInput("ps.txt", data) {});
 
-        Indicators indicators = new Indicators();
-        indicators.loadFromDirectory(
-                Paths.get("src", "test", "resources", "iocs").toFile()
-        );
-        p.setIndicators(indicators);
-        p.checkIndicators();
+        runIocCheck(p);
 
         assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, "lru-add-drain");
     }
@@ -53,12 +46,7 @@ public class ProcessesTest {
                 "root 50 2 0 0 0 0 S com.bad.actor.ma\n";
         p.parse(new AbstractInput("ps.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
 
-        Indicators indicators = new Indicators();
-        indicators.loadFromDirectory(
-                Paths.get("src", "test", "resources", "iocs").toFile()
-        );
-        p.setIndicators(indicators);
-        p.checkIndicators();
+        runIocCheck(p);
 
         // TODO: fix this test
         // assertFalse(p.detected.isEmpty());

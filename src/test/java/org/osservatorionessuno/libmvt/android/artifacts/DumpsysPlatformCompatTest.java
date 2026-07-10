@@ -3,13 +3,12 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
-import org.osservatorionessuno.libmvt.common.Indicators;
 
 import java.io.InputStream;
-import java.nio.file.Paths;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.runIocCheck;
 
 public class DumpsysPlatformCompatTest {
 
@@ -31,12 +30,7 @@ public class DumpsysPlatformCompatTest {
         InputStream data = ResourcesUtils.readResource("android_data/dumpsys_platform_compat.txt");
         pc.parse(new AbstractInput("dumpsys.txt", data) {});
 
-        Indicators ind = new Indicators();
-        ind.loadFromDirectory(
-                Paths.get("src", "test", "resources", "iocs").toFile()
-        );
-        pc.setIndicators(ind);
-        pc.checkIndicators();
+        runIocCheck(pc);
 
         assertEquals(0, pc.detected.size());
     }

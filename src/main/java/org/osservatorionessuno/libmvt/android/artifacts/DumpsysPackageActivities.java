@@ -7,12 +7,7 @@ import java.util.*;
 import java.io.IOException;
 
 /** Parser for dumpsys packages activities output. */
-public class DumpsysPackageActivities extends AndroidArtifact {
-
-    @Override
-    public List<String> paths() {
-        return List.of("dumpsys.txt", "bugreport-*.txt");
-    }
+public class DumpsysPackageActivities extends DumpsysArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {

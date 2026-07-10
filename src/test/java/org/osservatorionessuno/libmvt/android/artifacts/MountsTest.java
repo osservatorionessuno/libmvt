@@ -2,31 +2,25 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
-import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.DetectionType;
-import org.osservatorionessuno.libmvt.common.JvmMapStringResolver;
 
-import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetection;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.parseAndroidArtifact;
 
 public class MountsTest {
 
-    private static Mounts parse(String path, InputStream data) throws Exception {
-        Mounts mounts = new Mounts();
-        mounts.setStringResolver(new JvmMapStringResolver());
-        mounts.parse(new AbstractInput(path, data) {});
-        return mounts;
-    }
-
     @Test
     public void testParsingJson() throws Exception {
-        Mounts mounts = parse("mounts.json", ResourcesUtils.readResource("androidqf/mounts.json"));
+        Mounts mounts = parseAndroidArtifact(
+                Mounts::new,
+                "mounts.json",
+                ResourcesUtils.readResource("androidqf/mounts.json"));
         assertEquals(3, mounts.getResults().size());
 
         @SuppressWarnings("unchecked")
@@ -43,7 +37,10 @@ public class MountsTest {
 
     @Test
     public void testParsingProtobuf() throws Exception {
-        Mounts mounts = parse("mounts.pb", ResourcesUtils.readResource("androidqf/mounts.pb"));
+        Mounts mounts = parseAndroidArtifact(
+                Mounts::new,
+                "mounts.pb",
+                ResourcesUtils.readResource("androidqf/mounts.pb"));
         assertEquals(3, mounts.getResults().size());
 
         @SuppressWarnings("unchecked")
@@ -55,7 +52,10 @@ public class MountsTest {
 
     @Test
     public void testCheckIndicators() throws Exception {
-        Mounts mounts = parse("mounts.json", ResourcesUtils.readResource("androidqf/mounts.json"));
+        Mounts mounts = parseAndroidArtifact(
+                Mounts::new,
+                "mounts.json",
+                ResourcesUtils.readResource("androidqf/mounts.json"));
         mounts.checkIndicators();
 
         assertDetection(mounts.detected, DetectionType.MOUNTS_SYSTEM, AlertLevel.HIGH);
@@ -68,7 +68,10 @@ public class MountsTest {
 
     @Test
     public void testOptionsList() throws Exception {
-        Mounts mounts = parse("mounts.json", ResourcesUtils.readResource("androidqf/mounts.json"));
+        Mounts mounts = parseAndroidArtifact(
+                Mounts::new,
+                "mounts.json",
+                ResourcesUtils.readResource("androidqf/mounts.json"));
 
         @SuppressWarnings("unchecked")
         List<String> options = (List<String>) ((Map<?, ?>) mounts.getResults().get(2)).get("options_list");

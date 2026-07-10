@@ -6,6 +6,8 @@ import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.Detection;
 import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Utils;
+import org.osservatorionessuno.libmvt.android.ProtobufRecords;
+
 import java.util.List;
 import java.io.BufferedInputStream;
 import java.io.InputStream;
@@ -23,21 +25,18 @@ public class RootBinaries extends AndroidArtifact {
     @Override
     public void parse(AbstractInput artifactInput) throws IOException, JSONException {
         results.clear();
-        if (artifactInput.path.endsWith(".pb")) {
-            parseProtobuf(artifactInput.inputStream);
-            return;
-        } else if (artifactInput.path.endsWith(".json")) {
-            parseJson(artifactInput.inputStream);
-            return;
+        try {
+            parseByExtension(artifactInput, this::parseProtobuf, this::parseJson);
+        } catch (JSONException | IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException(e);
         }
-        throw new IOException("Unsupported file type: " + artifactInput.path);
     }
 
     private void parseProtobuf(InputStream input) throws IOException {
-        byte[] record;
-        while ((record = ProtobufRecords.readDelimited(input)) != null) {
-            results.add(ProtobufRecords.readStringRecord(record));
-        }
+        ProtobufRecords.forEachDelimited(input, record ->
+                results.add(ProtobufRecords.readStringRecord(record)));
     }
 
     private void parseJson(InputStream input) throws IOException, JSONException {

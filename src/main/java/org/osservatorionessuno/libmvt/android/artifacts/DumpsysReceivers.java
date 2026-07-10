@@ -9,12 +9,7 @@ import java.util.*;
 import java.io.IOException;
 
 /** Parser for dumpsys receivers information. */
-public class DumpsysReceivers extends AndroidArtifact {
-
-    @Override
-    public List<String> paths() {
-        return List.of("dumpsys.txt", "bugreport-*.txt");
-    }
+public class DumpsysReceivers extends DumpsysArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {

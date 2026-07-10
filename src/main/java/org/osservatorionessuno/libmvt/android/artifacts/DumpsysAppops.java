@@ -10,14 +10,9 @@ import java.io.IOException;
 import java.io.InputStream;
 
 /** Parser for dumpsys appops output. */
-public class DumpsysAppops extends AndroidArtifact {
+public class DumpsysAppops extends DumpsysArtifact {
     private static final Set<String> RISKY_PERMISSIONS = Set.of("REQUEST_INSTALL_PACKAGES");
     private static final Set<String> RISKY_PACKAGES = Set.of("com.android.shell");
-
-    @Override
-    public List<String> paths() {
-        return List.of("dumpsys.txt", "bugreport-*.txt");
-    }
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {

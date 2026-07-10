@@ -46,12 +46,12 @@ public class Settings extends AndroidArtifact {
     public void parse(AbstractInput artifactInput) throws IOException {
         results.clear();
         Map<String, String> map = new HashMap<>();
-        for (String line : collectLines(artifactInput.inputStream)) {
+        forEachLine(artifactInput.inputStream, line -> {
             line = line.trim();
-            if (line.isEmpty() || !line.contains("=")) continue;
+            if (line.isEmpty() || !line.contains("=")) return;
             String[] parts = line.split("=", 2);
             map.put(parts[0], parts.length > 1 ? parts[1] : "");
-        }
+        });
         
         results.add(map);
     }

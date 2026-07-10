@@ -9,14 +9,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /** Parser for dumpsys dbinfo output. */
-public class DumpsysDBInfo extends AndroidArtifact {
+public class DumpsysDBInfo extends DumpsysArtifact {
     private static final Pattern RXP = Pattern.compile(".*\\[([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3})\\].*\\[Pid:\\((\\d+)\\)\\](\\w+).*sql=\\\"(.+?)\\\"");
     private static final Pattern RXP_NO_PID = Pattern.compile(".*\\[([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3})\\][ ]{1}(\\w+).*sql=\\\"(.+?)\\\"");
-
-    @Override
-    public List<String> paths() {
-        return List.of("dumpsys.txt", "bugreport-*.txt");
-    }
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {

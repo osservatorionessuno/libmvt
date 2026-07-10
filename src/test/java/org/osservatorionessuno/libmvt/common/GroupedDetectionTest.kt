@@ -7,6 +7,13 @@ import org.osservatorionessuno.libmvt.common.JvmMapStringResolver
 
 class GroupedDetectionTest {
 
+    private fun stubArtifact(vararg detections: Detection) = object : Artifact() {
+        override fun parse(artifactInput: AbstractInput) = Unit
+        override fun checkIndicators() = Unit
+    }.apply {
+        this.detected.addAll(detections)
+    }
+
     @Test
     fun group_groupsByIdAndDeduplicates() {
         val detections = listOf(
@@ -29,18 +36,12 @@ class GroupedDetectionTest {
 
     @Test
     fun fromArtifacts_deduplicatesSameValueAcrossFiles() {
-        val artifactA = object : Artifact() {
-            override fun parse(artifactInput: AbstractInput) = Unit
-            override fun checkIndicators() = Unit
-        }.apply {
-            detected.add(Detection(DetectionType.ROOT_BINARIES, "su", "/system/xbin/su"))
-        }
-        val artifactB = object : Artifact() {
-            override fun parse(artifactInput: AbstractInput) = Unit
-            override fun checkIndicators() = Unit
-        }.apply {
-            detected.add(Detection(DetectionType.ROOT_BINARIES, "su", "/system/xbin/su"))
-        }
+        val artifactA = stubArtifact(
+            Detection(DetectionType.ROOT_BINARIES, "su", "/system/xbin/su"),
+        )
+        val artifactB = stubArtifact(
+            Detection(DetectionType.ROOT_BINARIES, "su", "/system/xbin/su"),
+        )
 
         val grouped = GroupedDetection.fromArtifacts(
             mapOf("a.json" to artifactA, "b.json" to artifactB),
@@ -54,18 +55,12 @@ class GroupedDetectionTest {
 
     @Test
     fun fromArtifacts_keepsDistinctValuesAcrossFiles() {
-        val artifactA = object : Artifact() {
-            override fun parse(artifactInput: AbstractInput) = Unit
-            override fun checkIndicators() = Unit
-        }.apply {
-            detected.add(Detection(DetectionType.ROOT_BINARIES, "su", "/system/xbin/su"))
-        }
-        val artifactB = object : Artifact() {
-            override fun parse(artifactInput: AbstractInput) = Unit
-            override fun checkIndicators() = Unit
-        }.apply {
-            detected.add(Detection(DetectionType.ROOT_BINARIES, "su", "/sbin/su"))
-        }
+        val artifactA = stubArtifact(
+            Detection(DetectionType.ROOT_BINARIES, "su", "/system/xbin/su"),
+        )
+        val artifactB = stubArtifact(
+            Detection(DetectionType.ROOT_BINARIES, "su", "/sbin/su"),
+        )
 
         val grouped = GroupedDetection.fromArtifacts(
             mapOf("a.json" to artifactA, "b.json" to artifactB),

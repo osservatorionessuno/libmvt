@@ -7,12 +7,7 @@ import java.util.*;
 import java.io.IOException;
 
 /** Parser for dumpsys battery history output. */
-public class DumpsysBatteryHistory extends AndroidArtifact {
-
-    @Override
-    public List<String> paths() {
-        return List.of("dumpsys.txt", "bugreport-*.txt");
-    }
+public class DumpsysBatteryHistory extends DumpsysArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
@@ -37,20 +32,18 @@ public class DumpsysBatteryHistory extends AndroidArtifact {
 
             if (line.contains("+job")) {
                 event = "start_job";
-                int start = line.indexOf("+job") + 5;
-                int colon = line.indexOf(':', start);
-                if (colon < 0) return;
-                uid = line.substring(start, colon);
-                service = line.substring(colon + 1).replace("\"", "").trim();
-                packageName = service.split("/")[0];
+                String[] job = parseJobEvent(line, "+job");
+                if (job == null) return;
+                uid = job[0];
+                service = job[1];
+                packageName = job[2];
             } else if (line.contains("-job")) {
                 event = "end_job";
-                int start = line.indexOf("-job") + 5;
-                int colon = line.indexOf(':', start);
-                if (colon < 0) return;
-                uid = line.substring(start, colon);
-                service = line.substring(colon + 1).replace("\"", "").trim();
-                packageName = service.split("/")[0];
+                String[] job = parseJobEvent(line, "-job");
+                if (job == null) return;
+                uid = job[0];
+                service = job[1];
+                packageName = job[2];
             } else if (line.contains("+running +wake_lock=")) {
                 int start = line.indexOf("+running +wake_lock=") + 21;
                 int colon = line.indexOf(':', start);
@@ -87,6 +80,19 @@ public class DumpsysBatteryHistory extends AndroidArtifact {
             map.put("service", service);
             results.add(map);
         });
+    }
+
+    /*
+        Parse a job event in the format: ... +job=u0a284:"org.telegram.messenger/.KeepAliveJob"
+    */
+    private static String[] parseJobEvent(String line, String marker) {
+        int start = line.indexOf(marker) + marker.length() + 1;
+        int colon = line.indexOf(':', start);
+        if (colon < 0) return null;
+        String uid = line.substring(start, colon);
+        String service = line.substring(colon + 1).replace("\"", "").trim();
+        String packageName = service.split("/")[0];
+        return new String[] { uid, service, packageName };
     }
 
     @Override
