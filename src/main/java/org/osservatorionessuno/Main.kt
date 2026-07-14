@@ -4,6 +4,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.osservatorionessuno.libmvt.android.ForensicRunner
 import org.osservatorionessuno.libmvt.android.parsers.APKParser
+import org.osservatorionessuno.libmvt.common.AlertLevel
 import org.osservatorionessuno.libmvt.common.Artifact
 import org.osservatorionessuno.libmvt.common.GroupedDetection
 import org.osservatorionessuno.libmvt.common.Indicators
@@ -40,7 +41,11 @@ object Main {
                 }
             } else {
                 val detections = runAnalysis(cli)
-                printDetections(detections, cli.pretty)
+                if (cli.json) {
+                    printJsonDetections(detections, cli.pretty)
+                } else {
+                    printDetections(detections, cli.indicatorsDir)
+                }
             }
             0
         } catch (e: CliArgs.CliException) {
@@ -75,7 +80,61 @@ object Main {
         )
     }
 
-    private fun printDetections(groupedResults: JSONArray, pretty: Boolean) {
+    private fun printDetections(groupedResults: JSONArray, indicatorsDir: Path) {
+        println("${BuildInfo.NAME} ${BuildInfo.VERSION} analysis results")
+        println()
+        println("Indicators: $indicatorsDir")
+        println()
+
+        val groups = (0 until groupedResults.length())
+            .map { groupedResults.getJSONObject(it) }
+            .filter { parseLevel(it.optString("level")) != AlertLevel.LOG }
+            .sortedBy { parseLevel(it.optString("level")).level }
+
+        if (groups.isEmpty()) {
+            println("No detections.")
+            println("Detections count: 0")
+            return
+        }
+
+        if (groups.any { parseLevel(it.optString("level")) == AlertLevel.CRITICAL }) {
+            println("WARNING: Critical indicators of compromise were found.")
+            println()
+        }
+
+        groups.forEachIndexed { i, group ->
+            if (i > 0) println()
+            printGroup(group)
+        }
+
+        println()
+        println("Detections count: ${groups.size}")
+    }
+
+    private fun printGroup(group: JSONObject) {
+        val values = group.optJSONArray("detections")?.let { detections ->
+            (0 until detections.length()).mapNotNull { j ->
+                jsonStringList(detections.getJSONObject(j).optJSONArray("value"))
+            }
+        } ?: emptyList()
+
+        val title = group.optString("title").let { t ->
+            if (values.size > 1) "$t (${values.size})" else t
+        }
+        println("[${group.optString("level").uppercase()}] $title")
+        group.optString("context").takeIf { it.isNotEmpty() }?.let(::println)
+        values.forEach { println("  • ${it.joinToString(", ")}") }
+    }
+
+    private fun jsonStringList(arr: JSONArray?): List<String>? {
+        if (arr == null || arr.length() == 0) return null
+        return List(arr.length()) { arr.optString(it) }
+    }
+
+    private fun parseLevel(name: String): AlertLevel =
+        runCatching { AlertLevel.valueOf(name.uppercase()) }.getOrDefault(AlertLevel.INFO)
+
+    private fun printJsonDetections(groupedResults: JSONArray, pretty: Boolean) {
         val root = JSONObject()
         root.put("groupedResults", groupedResults)
 

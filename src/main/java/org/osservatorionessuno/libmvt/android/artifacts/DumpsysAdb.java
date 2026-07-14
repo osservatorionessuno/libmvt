@@ -132,8 +132,8 @@ public class DumpsysAdb extends DumpsysArtifact {
             if (userKeys != null) {
                 for (Map<String, String> userKey : userKeys) {
                     detected.add(new Detection(DetectionType.ADB_FINGERPRINT,
-                        userKey.get("user"),
-                        userKey.get("fingerprint")));
+                        userKey.get("fingerprint"),
+                        userKey.get("user").isEmpty() ? "unknown user" : userKey.get("user")));
                 }
             }
         }

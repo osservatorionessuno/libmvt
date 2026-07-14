@@ -157,11 +157,7 @@ public class Mounts extends AndroidArtifact {
             // Check for system partitions mounted as read-write
             if (Boolean.TRUE.equals(mount.get("is_system_partition")) && Boolean.TRUE.equals(mount.get("is_read_write"))) {
                 systemRwMounts.add(mount);
-                if ("/system".equals(mountPoint)) {
-                    detected.add(new Detection(DetectionType.MOUNTS_ROOT, mountPoint));
-                } else {
-                    detected.add(new Detection(DetectionType.MOUNTS_SYSTEM, mountPoint));
-                }
+                detected.add(new Detection(DetectionType.MOUNTS_SYSTEM, mountPoint));
             }
 
             // Check for other suspicious mount options

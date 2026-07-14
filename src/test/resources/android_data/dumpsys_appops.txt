@@ -46,6 +46,38 @@ Current AppOps Service state:
       RECORD_AUDIO (allow):
       RUN_IN_BACKGROUND (allow):
           Access: [pers-s] 2022-03-29 18:37:30.315 (-4h50m23s772ms)
+  Uid 2000:
+    state=cch
+    capability=--------
+    appWidgetVisible=false
+      BODY_SENSORS: mode=foreground
+      READ_MEDIA_AUDIO: mode=ignore
+      READ_MEDIA_VIDEO: mode=ignore
+      READ_MEDIA_IMAGES: mode=ignore
+      LEGACY_STORAGE: mode=ignore
+      READ_HEART_RATE: mode=foreground
+      READ_SKIN_TEMPERATURE: mode=foreground
+      READ_OXYGEN_SATURATION: mode=foreground
+      CONTROL_AUDIO: mode=allow
+      CONTROL_AUDIO_PARTIAL: mode=allow
+    Package com.android.shell:
+      VIBRATE (allow): 
+        null=[
+          Access: [bg-s] 2026-06-01 12:24:41.092 (-34d5h21m10s795ms) duration=+77ms
+          Access: [cch-s] 2026-07-05 17:38:58.427 (-6m53s460ms) duration=+79ms
+        ]
+      WRITE_MEDIA_VIDEO (deny): 
+        null=[
+          Reject: [cch-s]2026-05-18 18:32:39.459 (-47d23h13m12s428ms)
+        ]
+      WRITE_MEDIA_IMAGES (deny): 
+        null=[
+          Reject: [cch-s]2026-05-18 18:32:39.457 (-47d23h13m12s430ms)
+        ]
+      MANAGE_EXTERNAL_STORAGE (default): 
+        null=[
+          Reject: [cch-s]2026-05-18 18:32:39.461 (-47d23h13m12s426ms)
+        ]
   Uid u0a103:
     state=cch
       COARSE_LOCATION: mode=ignore
