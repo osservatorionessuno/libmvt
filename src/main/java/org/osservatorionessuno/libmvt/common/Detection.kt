@@ -69,8 +69,8 @@ enum class DetectionType(
     MOUNTS_DATA(
         "mounts_data",
         AlertLevel.LOG,
-        "mvt_mounts_data_title",
-        "mvt_mounts_data_message",
+        "",
+        "",
     ),
     DANGEROUS_SETTINGS(
         "dangerous_settings",

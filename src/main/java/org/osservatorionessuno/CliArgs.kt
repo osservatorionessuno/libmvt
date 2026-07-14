@@ -33,6 +33,7 @@ object CliArgs {
         val indicatorsDir: Path,
         val inputPath: String?,
         val updateIndicators: Boolean,
+        val json: Boolean,
         val pretty: Boolean,
         val showVersion: Boolean,
         val analyzeAPK: Boolean,
@@ -62,6 +63,13 @@ object CliArgs {
             shortName = "v",
             fullName = "verbose",
             description = "Print DEBUG-level logs",
+        ).default(false)
+
+        val json by parser.option(
+            ArgType.Boolean,
+            shortName = "j",
+            fullName = "json",
+            description = "Print results in JSON format",
         ).default(false)
 
         val pretty by parser.option(
@@ -107,6 +115,7 @@ object CliArgs {
             indicatorsDir = resolveIndicatorsPath(indicatorsDir),
             updateIndicators = updateIndicators,
             inputPath = inputPathArg,
+            json = json,
             pretty = pretty,
             showVersion = showVersion,
             analyzeAPK = analyzeAPK,

@@ -61,8 +61,8 @@ public class ArtifactDetectionIntegrationTest {
         assertEquals(2, rootDetections.length());
         JSONObject rootEntry = rootDetections.getJSONObject(0);
         assertEquals("root_binaries.json", rootEntry.getString("file"));
-        assertEquals("SuperUser binary", rootEntry.getJSONArray("value").getString(0));
-        assertEquals("/system/xbin/su", rootEntry.getJSONArray("value").getString(1));
+        assertEquals("/system/xbin/su", rootEntry.getJSONArray("value").getString(0));
+        assertEquals("SuperUser binary", rootEntry.getJSONArray("value").getString(1));
         assertFalse(rootEntry.has("context"));
 
         JSONObject iocGroup = findGroup(json, DetectionType.IOC_MATCH.getId());

@@ -23,7 +23,7 @@ public class DumpsysAppopsTest {
         DumpsysAppops da = new DumpsysAppops();
         String data = ResourcesUtils.readResourceString("android_data/dumpsys_appops.txt");
         da.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
-        assertEquals(13, da.getResults().size());
+        assertEquals(14, da.getResults().size());
 
         @SuppressWarnings("unchecked")
         Map<String, Object> first = (Map<String, Object>) da.getResults().get(0);
@@ -35,18 +35,16 @@ public class DumpsysAppopsTest {
         assertEquals(1, perms.size());
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> seventh = (Map<String, Object>) da.getResults().get(6);
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> plist = (List<Map<String, Object>>) seventh.get("permissions");
-        @SuppressWarnings("unchecked")
-        Map<String, Object> secondPerm = plist.get(1);
-        @SuppressWarnings("unchecked")
-        List<?> entries = (List<?>) secondPerm.get("entries");
-        assertEquals(1, entries.size());
+        Map<String, Object> seventh = (Map<String, Object>) da.getResults().get(7);
+        assertEquals("com.android.shell", seventh.get("package_name"));
+        assertEquals("2000", seventh.get("uid"));
+        perms = (List<?>) seventh.get("permissions");
+        assertEquals(4, perms.size());
+        assertEquals("allow", ((Map<String, Object>) perms.get(0)).get("access"));
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> eleventh = (Map<String, Object>) da.getResults().get(11);
-        assertEquals(4, ((List<?>) eleventh.get("permissions")).size());
+        Map<String, Object> twelfth = (Map<String, Object>) da.getResults().get(12);
+        assertEquals(4, ((List<?>) twelfth.get("permissions")).size());
     }
 
     @Test

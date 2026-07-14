@@ -67,7 +67,7 @@ public class RootBinaries extends AndroidArtifact {
                 description = "unknown root file";
             }
 
-            detected.add(new Detection(DetectionType.ROOT_BINARIES, description, path));
+            detected.add(new Detection(DetectionType.ROOT_BINARIES, path, description));
         }
     }
 }

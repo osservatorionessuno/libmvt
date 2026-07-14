@@ -59,7 +59,7 @@ public class DumpsysAppops extends DumpsysArtifact {
                 String[] parts = line.trim().split("\\s+");
                 perm[0].put("name", parts[0]);
                 perm[0].put("entries", new ArrayList<>());
-                if (parts.length > 1) perm[0].put("access", parts[1].substring(1, parts[1].length() - 1));
+                if (parts.length > 1) perm[0].put("access", parts[1].substring(1, parts[1].length() - 2));
                 return;
             }
             if (line.startsWith("          ")) {
