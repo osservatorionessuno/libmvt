@@ -144,7 +144,7 @@ public class Files extends AndroidArtifact {
                         fileType = "executable ";
                     }
 
-                    detected.add(new Detection(DetectionType.FILES_SUSPICIOUS_PATH, fileType, path));
+                    detected.add(new Detection(DetectionType.FILES_SUSPICIOUS_PATH, path, fileType));
                 }
             }
  
@@ -154,8 +154,6 @@ public class Files extends AndroidArtifact {
 
             // Check if file hash matches any indicator
             detected.addAll(indicators.matchString(sha256, IndicatorType.FILE_HASH_SHA256));
-
-            // TODO: add SHA1 and MD5 check when available
         }
     }
 }
