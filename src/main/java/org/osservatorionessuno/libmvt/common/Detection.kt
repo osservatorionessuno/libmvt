@@ -48,12 +48,6 @@ enum class DetectionType(
         "mvt_getprop_security_patch_title",
         "mvt_getprop_security_patch_message",
     ),
-    MOUNTS_ROOT(
-        "mounts_root",
-        AlertLevel.HIGH,
-        "mvt_mounts_root_title",
-        "mvt_mounts_root_message",
-    ),
     MOUNTS_SYSTEM(
         "mounts_system",
         AlertLevel.HIGH,
