@@ -1,25 +1,27 @@
 package org.osservatorionessuno.libmvt.common;
 
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonToken;
 import org.ahocorasick.trie.Emit;
 import org.ahocorasick.trie.Trie;
-import org.json.JSONArray;
-import org.json.JSONObject;
-import org.json.JSONTokener;
 
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 /**
  * Loads indicators from .json and .stix2 (JSON) files and matches strings.
- * JSON parsing is done with Android's built-in org.json (no extra deps).
+ * Files are parsed as a stream (Gson's pull parser), never held in memory.
  * Keyword matching uses Aho-Corasick tries for efficient pattern matching.
  */
 public class Indicators {
@@ -49,6 +51,7 @@ public class Indicators {
      * This makes it easy to add new indicator types without modifying the core logic.
      */
     private static final Map<IndicatorType, Set<String>> INDICATOR_CONFIG = new EnumMap<>(IndicatorType.class);
+    private static final Map<String, IndicatorType> TYPE_BY_KEY = new HashMap<>();
     
     static {
         INDICATOR_CONFIG.put(IndicatorType.DOMAIN, Set.of("domain-name:value", "ipv4-addr:value"));
@@ -67,6 +70,7 @@ public class Indicators {
         INDICATOR_CONFIG.put(IndicatorType.APP_CERT_HASH_SHA1, Set.of("app:cert.sha1"));
         INDICATOR_CONFIG.put(IndicatorType.APP_CERT_HASH_SHA256, Set.of("app:cert.sha256"));
         INDICATOR_CONFIG.put(IndicatorType.IOS_PROFILE_ID, Set.of("configuration-profile:id"));
+        INDICATOR_CONFIG.forEach((type, keys) -> keys.forEach(key -> TYPE_BY_KEY.put(key, type)));
     }
 
     private final Map<IndicatorType, Trie.TrieBuilder> trieBuilders;
@@ -102,42 +106,117 @@ public class Indicators {
         }
 
         for (File f : files) {
-            JSONObject root = safeReadJsonObject(f);
-            if (root == null) continue;
-
-            // Case 1: STIX 2.x bundle-like JSON: { "objects": [ { "type":"indicator", "pattern":"[...]"} ] }
-            JSONArray objects = root.optJSONArray("objects");
-            if (objects != null) {
-                for (int i = 0; i < objects.length(); i++) {
-                    JSONObject node = objects.optJSONObject(i);
-                    if (node == null) continue;
-                    if ("indicator".equals(node.optString("type", ""))) {
-                        String pattern = node.optString("pattern", null);
-                        addPattern(pattern);
-                    }
-                }
-                continue;
-            }
-
-            // Case 2: MVT-style JSON: { "indicators": [ { "domain-name:value": ["a.com", ...], ... } ] }
-            JSONArray arr = root.optJSONArray("indicators");
-            if (arr != null) {
-                for (int i = 0; i < arr.length(); i++) {
-                    JSONObject coll = arr.optJSONObject(i);
-                    if (coll == null) continue;
-
-                    // Process all configured indicator types
-                    for (Map.Entry<IndicatorType, Set<String>> entry : INDICATOR_CONFIG.entrySet()) {
-                        IndicatorType type = entry.getKey();
-                        Set<String> keys = entry.getValue();
-                        for (String key : keys) {
-                            addField(type, coll, key);
-                        }
-                    }
-                }
-            }
+            loadFile(f);
         }
         buildTries();
+    }
+
+    /**
+     * Streaming parse: only the handful of fields in use are ever materialized, so a file is
+     * never held in memory regardless of size or formatting (a DOM parse peaks at ~10x the
+     * file size, which for a multi-megabyte feed is a per-scan OOM risk on a phone).
+     * Accepts the same shapes as before: a STIX 2.x bundle-like object with an "objects"
+     * array, an MVT-style object with an "indicators" array, or a bare top-level array
+     * treated as a list of STIX objects. Unreadable or malformed files are skipped.
+     */
+    private void loadFile(File f) {
+        try (JsonReader reader = new JsonReader(
+                new InputStreamReader(new BufferedInputStream(new FileInputStream(f)), StandardCharsets.UTF_8))) {
+            if (reader.peek() == JsonToken.BEGIN_ARRAY) {
+                readStixObjects(reader);
+                return;
+            }
+            reader.beginObject();
+            while (reader.hasNext()) {
+                String name = reader.nextName();
+                if ("objects".equals(name) && reader.peek() == JsonToken.BEGIN_ARRAY) {
+                    // STIX 2.x bundle-like: { "objects": [ { "type":"indicator", "pattern":"[...]"} ] }
+                    readStixObjects(reader);
+                } else if ("indicators".equals(name) && reader.peek() == JsonToken.BEGIN_ARRAY) {
+                    // MVT-style: { "indicators": [ { "domain-name:value": ["a.com", ...], ... } ] }
+                    readMvtCollections(reader);
+                } else {
+                    reader.skipValue();
+                }
+            }
+            reader.endObject();
+        } catch (Exception e) {
+            // skip unreadable or malformed files, as before
+        }
+    }
+
+    private void readStixObjects(JsonReader reader) throws IOException {
+        reader.beginArray();
+        while (reader.hasNext()) {
+            if (reader.peek() != JsonToken.BEGIN_OBJECT) {
+                reader.skipValue();
+                continue;
+            }
+            String type = null;
+            String pattern = null;
+            reader.beginObject();
+            while (reader.hasNext()) {
+                String name = reader.nextName();
+                if ("type".equals(name) && reader.peek() == JsonToken.STRING) {
+                    type = reader.nextString();
+                } else if ("pattern".equals(name) && reader.peek() == JsonToken.STRING) {
+                    pattern = reader.nextString();
+                } else {
+                    reader.skipValue();
+                }
+            }
+            reader.endObject();
+            if ("indicator".equals(type)) {
+                addPattern(pattern);
+            }
+        }
+        reader.endArray();
+    }
+
+    private void readMvtCollections(JsonReader reader) throws IOException {
+        reader.beginArray();
+        while (reader.hasNext()) {
+            if (reader.peek() != JsonToken.BEGIN_OBJECT) {
+                reader.skipValue();
+                continue;
+            }
+            reader.beginObject();
+            while (reader.hasNext()) {
+                IndicatorType type = TYPE_BY_KEY.get(reader.nextName());
+                if (type == null) {
+                    reader.skipValue();
+                } else if (reader.peek() == JsonToken.BEGIN_ARRAY) {
+                    reader.beginArray();
+                    while (reader.hasNext()) {
+                        addKeyword(type, nextScalarOrNull(reader));
+                    }
+                    reader.endArray();
+                } else {
+                    addKeyword(type, nextScalarOrNull(reader));
+                }
+            }
+            reader.endObject();
+        }
+        reader.endArray();
+    }
+
+    private static String nextScalarOrNull(JsonReader reader) throws IOException {
+        switch (reader.peek()) {
+            case STRING:
+            case NUMBER:
+                return reader.nextString();
+            case BOOLEAN:
+                return String.valueOf(reader.nextBoolean());
+            default:
+                reader.skipValue();
+                return null;
+        }
+    }
+
+    private void addKeyword(IndicatorType type, String value) {
+        Trie.TrieBuilder builder = trieBuilders.get(type);
+        if (builder == null || value == null || value.trim().isEmpty()) return;
+        builder.addKeyword(value.toLowerCase());
     }
 
     /** Build the Aho-Corasick tries from the builders. */
@@ -178,41 +257,6 @@ public class Indicators {
         }
     }
 
-    /** Add values from indicators JSON (each key can be a single string or an array). */
-    private void addField(IndicatorType type, JSONObject coll, String key) {
-        if (coll == null) return;
-        Trie.TrieBuilder builder = trieBuilders.get(type);
-        if (builder == null) return;
-
-        Object node = coll.opt(key);
-        if (node == null) return;
-
-        if (node instanceof JSONArray) {
-            JSONArray arr = (JSONArray) node;
-            for (int i = 0; i < arr.length(); i++) {
-                String s = toNonBlank(arr.opt(i));
-                if (s != null) {
-                    String lower = s.toLowerCase();
-                    builder.addKeyword(lower);
-                }
-            }
-        } else {
-            String s = toNonBlank(node);
-            if (s != null) {
-                String lower = s.toLowerCase();
-                builder.addKeyword(lower);
-            }
-        }
-    }
-
-    private static String toNonBlank(Object o) {
-        if (o == null) return null;
-        String s = o.toString();
-        if (s == null) return null;
-        if (s.trim().isEmpty()) return null;
-        return s;
-    }
-
     /** Match string against loaded indicators. */
     public List<Detection> matchString(String s, IndicatorType type) {
         if (s == null) return Collections.emptyList();
@@ -230,31 +274,4 @@ public class Indicators {
     }
 
     // --------- tiny JSON helper ----------
-
-    /** Safely read a JSON object from a file using core org.json. */
-    private static JSONObject safeReadJsonObject(File f) {
-        try (BufferedInputStream bin = new BufferedInputStream(new FileInputStream(f))) {
-            // Read file into a String
-            StringBuilder sb = new StringBuilder();
-            byte[] buf = new byte[4096];
-            int n;
-            while ((n = bin.read(buf)) != -1) {
-                sb.append(new String(buf, 0, n, StandardCharsets.UTF_8));
-            }
-
-            // Parse JSON from string
-            JSONTokener tok = new JSONTokener(sb.toString());
-            Object any = tok.nextValue();
-            if (any instanceof JSONObject) {
-                return (JSONObject) any;
-            }
-            if (any instanceof JSONArray) {
-                JSONObject wrapper = new JSONObject();
-                wrapper.put("objects", (JSONArray) any); // treat array as STIX-like bundle
-                return wrapper;
-            }
-        } catch (Exception ignored) {
-        }
-        return null;
-    }
 }
