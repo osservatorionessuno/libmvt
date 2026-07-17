@@ -9,6 +9,7 @@ kotlinxCli = "0.3.6"
 junitJupiter = "5.10.2"
 junitPlatform = "1.10.2"
 protobuf = "4.32.0"
+gson = "2.11.0"
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
@@ -23,3 +24,4 @@ kotlinx-cli = { group = "org.jetbrains.kotlinx", name = "kotlinx-cli", version.r
 junit-jupiter = { group = "org.junit.jupiter", name = "junit-jupiter", version.ref = "junitJupiter" }
 junit-platform-launcher = { group = "org.junit.platform", name = "junit-platform-launcher", version.ref = "junitPlatform" }
 protobuf-javalite = { group = "com.google.protobuf", name = "protobuf-javalite", version.ref = "protobuf" }
+gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }

@@ -21,6 +21,7 @@ dependencies {
     implementation(libs.apksig)
     implementation(libs.org.json)
     implementation(libs.ahocorasick)
+    implementation(libs.gson)
     implementation(libs.snakeyaml)
     implementation(libs.kotlinx.cli)
     implementation(libs.protobuf.javalite)
