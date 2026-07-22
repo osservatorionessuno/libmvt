@@ -1,0 +1,13 @@
+// Bugbane string record, used by root_binaries.pb and mounts.pb.
+syntax = "proto3";
+
+package org.osservatorionessuno.libmvt.android.artifacts;
+
+option java_package = "org.osservatorionessuno.libmvt.android.artifacts";
+option java_outer_classname = "StringRecordProto";
+
+message StringRecord {
+  // Root binaries: absolute path to a su/magisk-like binary.
+  // Mounts: one line from `mount` output.
+  string value = 1;
+}
