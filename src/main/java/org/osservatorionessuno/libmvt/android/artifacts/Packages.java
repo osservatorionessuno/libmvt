@@ -217,10 +217,10 @@ public class Packages extends AndroidArtifact {
                 detected.add(new Detection(DetectionType.PACKAGES_ADB_INSTALLED, result.name));
             } else if (Utils.THIRD_PARTY_STORE_INSTALLERS.contains(result.installer)) {
                 detected.add(new Detection(DetectionType.PACKAGES_THIRD_PARTY_STORE_INSTALLED,
-                    result.installer, result.name));
+                    result.name, result.installer));
             } else if (Utils.BROWSER_INSTALLERS.contains(result.installer)) {
                 detected.add(new Detection(DetectionType.PACKAGES_BROWSER_INSTALLED,
-                    result.installer, result.name));
+                    result.name, result.installer));
             }
 
 
