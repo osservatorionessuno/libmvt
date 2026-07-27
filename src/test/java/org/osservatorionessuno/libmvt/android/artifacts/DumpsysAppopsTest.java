@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetection;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.runIocCheck;
@@ -58,5 +59,15 @@ public class DumpsysAppopsTest {
         assertDetectionValueContains(da.detected, DetectionType.IOC_MATCH, "com.facebook.katana");
         assertDetection(da.detected, DetectionType.APPOPS_RISKY_PERMISSION, AlertLevel.MEDIUM);
         assertDetectionValueContains(da.detected, DetectionType.APPOPS_RISKY_PERMISSION, "REQUEST_INSTALL_PACKAGES");
+        assertDetectionValueContains(da.detected, DetectionType.APPOPS_RISKY_PERMISSION, "2022-02-02 23:20:13.096");
+
+        List<String> appopsTimestamps = da.detected.stream()
+                .filter(d -> DetectionType.APPOPS_RISKY_PERMISSION.getId().equals(d.getId()))
+                .map(d -> d.getValue().size() > 3 ? d.getValue().get(3) : "")
+                .filter(ts -> !ts.isEmpty())
+                .toList();
+        List<String> sorted = appopsTimestamps.stream().sorted().toList();
+        // yyyy-MM-dd HH:mm:ss.SSS sorts chronologically as plain strings
+        assertEquals(sorted, appopsTimestamps, "APPOPS detections must be ordered by timestamp");
     }
 }
