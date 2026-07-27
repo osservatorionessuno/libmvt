@@ -7,6 +7,7 @@ import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import java.util.Date
 import javax.security.auth.x500.X500Principal
+import org.osservatorionessuno.libmvt.common.Utils
 
 object CertificateParser {
     data class CertificateInfo(
@@ -17,6 +18,7 @@ object CertificateParser {
         val algorithm: String,
         val version: Int,
         val serialNumber: String,
+        val trusted: Boolean,
         val checksums: Checksum,
     )
     data class Checksum(
@@ -90,8 +92,9 @@ object CertificateParser {
     }
 
     @JvmStatic
-    fun fromX509Certificate(cert: X509Certificate): CertificateInfo =
-        CertificateInfo(
+    fun fromX509Certificate(cert: X509Certificate): CertificateInfo {
+        val sha1 = certificateFingerprint(cert, "SHA1")
+        return CertificateInfo(
             subject = formatPrincipal(cert.subjectX500Principal),
             issuer = formatPrincipal(cert.issuerX500Principal),
             notBefore = cert.notBefore,
@@ -99,16 +102,21 @@ object CertificateParser {
             algorithm = cert.sigAlgName,
             version = cert.version,
             serialNumber = cert.serialNumber.toString(16),
+            trusted = isTrustedCertificate(cert, sha1),
             checksums =
                 Checksum(
                     md5 = certificateFingerprint(cert, "MD5"),
-                    sha1 = certificateFingerprint(cert, "SHA1"),
+                    sha1 = sha1,
                     sha256 = certificateFingerprint(cert, "SHA-256"),
                 ),
         )
+    }
 
     private fun certificateFingerprint(cert: X509Certificate, algorithm: String): String {
         val digest = MessageDigest.getInstance(algorithm).digest(cert.encoded)
         return digest.joinToString(separator = "") { b -> "%02x".format(b) }
     }
+
+    private fun isTrustedCertificate(cert: X509Certificate, sha1: String): Boolean =
+        Utils.VALID_CERTIFICATES.contains(sha1)
 }

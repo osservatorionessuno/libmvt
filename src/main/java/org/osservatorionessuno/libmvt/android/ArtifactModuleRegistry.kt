@@ -33,6 +33,8 @@ object ArtifactModuleRegistry {
         { RootBinaries() },
         { Mounts() },
         { SELinux() },
+        // Extras
+        //{ APK() },
     )
 
     private val exactPatterns: List<Pair<String, Int>>

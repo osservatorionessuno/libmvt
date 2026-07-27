@@ -2,6 +2,7 @@ package org.osservatorionessuno
 
 import org.json.JSONArray
 import org.json.JSONObject
+import org.osservatorionessuno.libmvt.common.logging.LogUtils
 import org.osservatorionessuno.libmvt.android.ForensicRunner
 import org.osservatorionessuno.libmvt.android.parsers.APKParser
 import org.osservatorionessuno.libmvt.common.AlertLevel
@@ -11,10 +12,14 @@ import org.osservatorionessuno.libmvt.common.Indicators
 import org.osservatorionessuno.libmvt.common.IndicatorsUpdates
 import org.osservatorionessuno.libmvt.common.JvmMapStringResolver
 import java.io.File
+import java.io.IOException
+import java.nio.file.NoSuchFileException
 import java.nio.file.Files
 import java.nio.file.Path
 
 object Main {
+
+    private const val TAG = BuildInfo.NAME
 
     @JvmStatic
     fun main(args: Array<String>) {
@@ -49,10 +54,16 @@ object Main {
             }
             0
         } catch (e: CliArgs.CliException) {
-            System.err.println(e.message)
+            LogUtils.e(TAG, e.message)
+            1
+        } catch (e: NoSuchFileException) {
+            LogUtils.e(TAG, "File not found: " + e.message)
+            1
+        } catch (e: IOException) {
+            LogUtils.e(TAG, e.message)
             1
         } catch (e: Exception) {
-            System.err.println("Unexpected error: ${e.message}")
+            LogUtils.e(TAG, "Unexpected error: ${e.message}")
             e.printStackTrace(System.err)
             1
         }

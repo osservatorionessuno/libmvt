@@ -8,11 +8,17 @@ import org.osservatorionessuno.libmvt.common.JvmMapStringResolver;
 import org.osservatorionessuno.libmvt.common.ReopenableInput;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import static org.osservatorionessuno.libmvt.ResourcesUtils.readResourceBytes;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
@@ -20,6 +26,8 @@ import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDet
 import static org.junit.jupiter.api.Assertions.*;
 
 public class ForensicRunnerTest {
+
+    private static final String TOMBSTONE_KEY = "bugreport.zip/FS/data/tombstones/tombstone_01";
 
     @Test
     public void testRunAllModules() throws Exception {
@@ -60,6 +68,14 @@ public class ForensicRunnerTest {
         assertTrue(ForensicRunner.findModuleIndices("FS/data/tombstones/other_file.txt").isEmpty());
         assertFalse(ForensicRunner.findModuleIndices("getprop.txt").isEmpty());
         assertFalse(ForensicRunner.findModuleIndices("logs/anr_2026-03-28-01-20-41-432").isEmpty());
+    }
+
+    @Test
+    public void testIsAnalyzable() {
+        assertTrue(ForensicRunner.isAnalyzable("bugreport.zip"));
+        assertTrue(ForensicRunner.isAnalyzable("path/to/Bugreport.ZIP"));
+        assertTrue(ForensicRunner.isAnalyzable("getprop.txt"));
+        assertFalse(ForensicRunner.isAnalyzable("unknown.bin"));
     }
 
     @Test
@@ -123,7 +139,8 @@ public class ForensicRunnerTest {
         assertTrue(ForensicRunner.findModuleIndices("dumpsys.txt").size() > 1);
 
         Artifact art = runner.streamFileAnalysis(
-                ReopenableInput.of("dumpsys.txt", () -> new ByteArrayInputStream(data)));
+                        ReopenableInput.of("dumpsys.txt", () -> new ByteArrayInputStream(data)))
+                .get("dumpsys.txt");
 
         // DumpsysAppops is dropped and reported; DumpsysPlatformCompat still contributes.
         assertNotNull(art);
@@ -143,26 +160,105 @@ public class ForensicRunnerTest {
         List<Integer> indices = ForensicRunner.findModuleIndices("dumpsys.txt");
         assertTrue(indices.size() > 1);
 
-        Artifact art = runner.streamFileAnalysis(input);
-        assertNotNull(art);
-        assertTrue(art.getResults().size() > 0);
-    }
-
-    @Test
-    public void testStreamAnalysisWithReopenableInput() throws Exception {
-        byte[] getprop = readResourceBytes("androidqf/getprop.txt");
-        byte[] dumpsys = readResourceBytes("androidqf/dumpsys.txt");
-
-        ForensicRunner runner = new ForensicRunner(new JvmMapStringResolver());
-        Map<String, Artifact> res = runner.streamAnalysis(List.of(
-                ReopenableInput.of("getprop.txt", () -> new ByteArrayInputStream(getprop)),
-                ReopenableInput.of("dumpsys.txt", () -> new ByteArrayInputStream(dumpsys))
-        ));
-
-        assertTrue(res.containsKey("getprop.txt"));
-        assertTrue(res.get("getprop.txt").getResults().size() > 0);
+        Map<String, Artifact> res = runner.streamFileAnalysis(input);
         assertTrue(res.containsKey("dumpsys.txt"));
         assertTrue(res.get("dumpsys.txt").getResults().size() > 0);
     }
 
+    @Test
+    public void testStreamAnalysisFromZip() throws Exception {
+        File sourceDir = Paths.get("src", "test", "resources", "androidqf").toFile();
+        File zipFile = File.createTempFile("androidqf", ".zip");
+        zipFile.deleteOnExit();
+
+        try (ZipOutputStream zipOut = new ZipOutputStream(new FileOutputStream(zipFile))) {
+            for (File file : sourceDir.listFiles()) {
+                if (!file.isFile()) {
+                    continue;
+                }
+                zipOut.putNextEntry(new ZipEntry(file.getName()));
+                zipOut.write(readResourceBytes("androidqf/" + file.getName()));
+                zipOut.closeEntry();
+            }
+        }
+
+        ForensicRunner runner = new ForensicRunner(new JvmMapStringResolver());
+        runner.setIndicators(DetectionTestUtils.loadTestIndicators());
+        Map<String, Artifact> res = runner.streamAnalysisFromZip(zipFile);
+
+        assertTrue(res.containsKey("getprop.txt"));
+        assertTrue(res.get("getprop.txt").getResults().size() > 0);
+    }
+
+    @Test
+    public void testNestedBugreportZipFromOuterZip() throws Exception {
+        byte[] bugreportBytes = zipBugreportFixture();
+        File outerZip = File.createTempFile("androidqf-with-bugreport", ".zip");
+        outerZip.deleteOnExit();
+
+        try (ZipOutputStream zipOut = new ZipOutputStream(new FileOutputStream(outerZip))) {
+            zipOut.putNextEntry(new ZipEntry("getprop.txt"));
+            zipOut.write(readResourceBytes("androidqf/getprop.txt"));
+            zipOut.closeEntry();
+            zipOut.putNextEntry(new ZipEntry("bugreport.zip"));
+            zipOut.write(bugreportBytes);
+            zipOut.closeEntry();
+        }
+
+        ForensicRunner runner = new ForensicRunner(new JvmMapStringResolver());
+        Map<String, Artifact> res = runner.streamAnalysisFromZip(outerZip);
+
+        assertTrue(res.containsKey("getprop.txt"));
+        assertTrue(res.containsKey(TOMBSTONE_KEY));
+        assertTrue(res.get(TOMBSTONE_KEY).getResults().size() > 0);
+    }
+
+    @Test
+    public void testStreamFileAnalysisExpandsBugreportZip() throws Exception {
+        byte[] bugreportBytes = zipBugreportFixture();
+        ReopenableInput input = ReopenableInput.of(
+                "bugreport.zip",
+                () -> new ByteArrayInputStream(bugreportBytes));
+
+        ForensicRunner runner = new ForensicRunner(new JvmMapStringResolver());
+        Map<String, Artifact> res = runner.streamFileAnalysis(input);
+
+        assertTrue(res.containsKey(TOMBSTONE_KEY));
+        assertTrue(res.get(TOMBSTONE_KEY).getResults().size() > 0);
+    }
+
+    @Test
+    public void testDirectoryModeExpandsBugreportZip() throws Exception {
+        Path tempDir = Files.createTempDirectory("androidqf-bugreport-dir");
+        tempDir.toFile().deleteOnExit();
+        Path bugreportZip = tempDir.resolve("bugreport.zip");
+        Files.write(bugreportZip, zipBugreportFixture());
+        bugreportZip.toFile().deleteOnExit();
+
+        ForensicRunner runner = new ForensicRunner(new JvmMapStringResolver());
+        Map<String, Artifact> res = runner.streamLegacyAnalysisFromDirectory(tempDir.toFile());
+
+        assertTrue(res.containsKey(TOMBSTONE_KEY));
+        assertTrue(res.get(TOMBSTONE_KEY).getResults().size() > 0);
+    }
+
+    private static byte[] zipBugreportFixture() throws IOException {
+        Path root = Paths.get("src", "test", "resources", "android_data", "bugreport");
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ZipOutputStream zipOut = new ZipOutputStream(bos)) {
+            Files.walk(root)
+                    .filter(Files::isRegularFile)
+                    .forEach(path -> {
+                        try {
+                            String entryName = root.relativize(path).toString().replace('\\', '/');
+                            zipOut.putNextEntry(new ZipEntry(entryName));
+                            zipOut.write(Files.readAllBytes(path));
+                            zipOut.closeEntry();
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
+        }
+        return bos.toByteArray();
+    }
 }

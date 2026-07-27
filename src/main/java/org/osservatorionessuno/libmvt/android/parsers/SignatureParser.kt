@@ -2,7 +2,9 @@ package org.osservatorionessuno.libmvt.android.parsers
 
 import com.android.apksig.ApkVerifier
 import com.android.apksig.apk.ApkFormatException
+import com.android.apksig.util.DataSources
 import java.io.File
+import java.nio.ByteBuffer
 import java.security.cert.X509Certificate
 import org.osservatorionessuno.libmvt.common.logging.LogUtils
 
@@ -26,7 +28,20 @@ class SignatureParser {
      */
     @Throws(SignatureParsingException::class)
     fun parseAPKSignature(apk: File): APKSignatureInfo {
-        val verifier = ApkVerifier.Builder(apk).build()
+        return parseVerified(ApkVerifier.Builder(apk).build())
+    }
+
+    /**
+     * Same as [parseAPKSignature] but verifies an APK already loaded in memory.
+     */
+    @Throws(SignatureParsingException::class)
+    fun parseAPKSignature(apkBytes: ByteArray): APKSignatureInfo {
+        val dataSource = DataSources.asDataSource(ByteBuffer.wrap(apkBytes))
+        return parseVerified(ApkVerifier.Builder(dataSource).build())
+    }
+
+    @Throws(SignatureParsingException::class)
+    private fun parseVerified(verifier: ApkVerifier): APKSignatureInfo {
         val result =
             try {
                 verifier.verify()

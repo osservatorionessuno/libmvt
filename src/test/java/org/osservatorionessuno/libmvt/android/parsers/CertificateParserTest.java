@@ -20,6 +20,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import com.android.apksig.ApkVerifier;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
+import org.osservatorionessuno.libmvt.common.Utils;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -68,6 +69,30 @@ public class CertificateParserTest {
         assertNotNull(info);
         assertNotNull(info.getSubject());
         assertEquals("C=Unknown,ST=Unknown,L=Unknown,O=LibMVT,OU=LibMVT,CN=Test", info.getSubject());
+    }
+
+    @Test
+    public void testFromX509CertificateTrustedUsesValidCertificatesAllowlist() throws Exception {
+        File apk = ResourcesUtils.readResourceFile("apks/signed_test.apk");
+        ApkVerifier verifier = new ApkVerifier.Builder(apk).build();
+        X509Certificate cert = verifier.verify().getSignerCertificates().get(0);
+
+        CertificateParser.CertificateInfo untrusted = CertificateParser.fromX509Certificate(cert);
+        assertFalse(untrusted.getTrusted());
+        assertFalse(Utils.VALID_CERTIFICATES.contains(untrusted.getChecksums().getSha1()));
+
+        String sha1 = untrusted.getChecksums().getSha1();
+        Utils.VALID_CERTIFICATES.add(sha1);
+        try {
+            CertificateParser.CertificateInfo trusted = CertificateParser.fromX509Certificate(cert);
+            assertTrue(trusted.getTrusted());
+            assertEquals(sha1, trusted.getChecksums().getSha1());
+        } finally {
+            Utils.VALID_CERTIFICATES.remove(sha1);
+        }
+
+        // Allowlist mutation must not leak across tests.
+        assertFalse(CertificateParser.fromX509Certificate(cert).getTrusted());
     }
 
     /**

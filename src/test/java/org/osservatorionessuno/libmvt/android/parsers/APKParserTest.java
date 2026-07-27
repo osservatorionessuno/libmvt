@@ -1,6 +1,8 @@
 package org.osservatorionessuno.libmvt.android.parsers;
 
 import org.junit.jupiter.api.Test;
+import org.osservatorionessuno.libmvt.ResourcesUtils;
+import org.osservatorionessuno.libmvt.common.Utils;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -41,6 +43,66 @@ public class APKParserTest {
         assertThrows(Exception.class, () -> APKParser.parseAPK(apk));
     }
 
+    @Test
+    public void testParseApkFromInputStreamMissingManifestThrows() throws Exception {
+        File apk = createTempApkZip(builder -> {
+            builder.add("assets/some_asset.txt", "hello");
+            builder.add("lib/arm64-v8a/libfoo.so", "bin");
+        });
+
+        assertThrows(Exception.class, () -> APKParser.parseAPK(Files.newInputStream(apk.toPath())));
+    }
+
+    @Test
+    public void testParseSignedApkFromFileAndStreamAgree() throws Exception {
+        File apk = ResourcesUtils.readResourceFile("apks/signed_test.apk");
+
+        APKParser.APKInfo fromFile = APKParser.parseAPK(apk);
+        APKParser.APKInfo fromStream =
+                APKParser.parseAPK(Files.newInputStream(apk.toPath()));
+
+        assertFalse(fromFile.getPackageName().isEmpty());
+        assertEquals(fromFile.getPackageName(), fromStream.getPackageName());
+        assertEquals(fromFile.getVersionCode(), fromStream.getVersionCode());
+        assertEquals(fromFile.getVersionName(), fromStream.getVersionName());
+        assertEquals(fromFile.getSuspicious(), fromStream.getSuspicious());
+        assertEquals(fromFile.getCertificates().size(), fromStream.getCertificates().size());
+        assertFalse(fromFile.getCertificates().isEmpty());
+        assertEquals(
+                fromFile.getCertificates().get(0).getChecksums().getSha1(),
+                fromStream.getCertificates().get(0).getChecksums().getSha1());
+    }
+
+    @Test
+    public void testParseSignedApkUntrustedRunsStaticAnalysisPath() throws Exception {
+        File apk = ResourcesUtils.readResourceFile("apks/signed_test.apk");
+        APKParser.APKInfo info = APKParser.parseAPK(apk);
+
+        assertFalse(info.getCertificates().isEmpty());
+        // Test keystore is not in Utils.VALID_CERTIFICATES, so static analysis still runs.
+        assertFalse(info.getCertificates().get(0).getTrusted());
+        // signed_test.apk has a minimal/benign manifest → not flagged suspicious.
+        assertFalse(info.getSuspicious());
+    }
+
+    @Test
+    public void testParseSignedApkTrustedSkipsStaticAnalysis() throws Exception {
+        File apk = ResourcesUtils.readResourceFile("apks/signed_test.apk");
+        APKParser.APKInfo baseline = APKParser.parseAPK(apk);
+        String sha1 = baseline.getCertificates().get(0).getChecksums().getSha1();
+        assertFalse(baseline.getCertificates().get(0).getTrusted());
+
+        Utils.VALID_CERTIFICATES.add(sha1);
+        try {
+            APKParser.APKInfo trusted = APKParser.parseAPK(apk);
+            assertTrue(trusted.getCertificates().get(0).getTrusted());
+            // Trusted signer → no static analysis; suspicious stays false.
+            assertFalse(trusted.getSuspicious());
+        } finally {
+            Utils.VALID_CERTIFICATES.remove(sha1);
+        }
+    }
+
     private interface ZipBuilderAction {
         void build(ZipBuilder builder) throws Exception;
     }
@@ -72,4 +134,3 @@ public class APKParserTest {
         return f;
     }
 }
-

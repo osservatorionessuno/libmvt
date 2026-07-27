@@ -9,11 +9,15 @@ import org.osservatorionessuno.libmvt.common.Indicators
 import org.osservatorionessuno.libmvt.common.ReopenableInput
 import org.osservatorionessuno.libmvt.common.StringResolver
 import org.osservatorionessuno.libmvt.common.logging.LogUtils
+import java.io.ByteArrayInputStream
 import java.io.File
+import java.io.FileNotFoundException
+import java.io.IOException
 import java.io.InputStream
 import java.util.LinkedHashMap
 import java.util.concurrent.CancellationException
 import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
 
 class ArtifactInput(
     path: String,
@@ -35,7 +39,7 @@ private class SkippedArtifact : AndroidArtifact() {
 /**
  * Simple helper to run the available AndroidQF artifact parsers on a folder
  * or zip containing extracted androidqf data.
- * 
+ *
  * Axioms:
  * - Each module declares path patterns via [AndroidArtifact.paths] (exact or glob).
  * - Every matching module receives an [ArtifactInput]; only the module should read its stream.
@@ -43,6 +47,7 @@ private class SkippedArtifact : AndroidArtifact() {
  * - A fresh module instance is created per parse; results are then merged.
  * - A module that throws is dropped and logged; the rest of the acquisition still runs.
  * - [SKIP_FILES] and paths under `tmp/` are ignored.
+ * - Nested [BUGREPORT_ZIP] entries are buffered in memory and analyzed like a zip archive.
  */
 class ForensicRunner(private val stringResolver: StringResolver) {
     private var indicators: Indicators? = null
@@ -70,32 +75,78 @@ class ForensicRunner(private val stringResolver: StringResolver) {
     fun streamAnalysisFromZip(zip: File): Map<String, Artifact> {
         LogUtils.d(TAG, "streamAnalysisFromZip: $zip")
         val results = LinkedHashMap<String, Artifact>()
-        ZipFile(zip).use { zipFile ->
-            for (entry in zipFile.entries()) {
-                analyzePath(entry.name) { zipFile.getInputStream(entry) }?.let { artifact ->
-                    results[entry.name] = artifact
+        try {
+            ZipFile(zip).use { zipFile ->
+                for (entry in zipFile.entries()) {
+                    if (entry.isDirectory) continue
+                    LogUtils.d(TAG, "Analyzing entry: ${entry.name}")
+                    results.putAll(analyzeEntry(entry.name) { zipFile.getInputStream(entry) })
+                }
+            }
+        } catch (e: IOException) {
+            if (e is FileNotFoundException && zip.exists()) {
+                throw IOException(
+                    "Cannot read ${zip.absolutePath}: the file exists but access was denied.",
+                    e,
+                )
+            }
+            throw e
+        }
+        return results
+    }
+
+    /**
+     * Analyze a single reopenable entry.
+     * Normal files yield a 0–1 entry map; [BUGREPORT_ZIP] expands to nested results.
+     */
+    @Throws(Exception::class)
+    fun streamFileAnalysis(entry: ReopenableInput): Map<String, Artifact> =
+        analyzeEntry(entry.path) { entry.openStream() }
+
+    /**
+     * Expand an in-memory zip (e.g. nested bugreport) and analyze matching entries.
+     * Result keys are `"$pathPrefix/${entry.name}"`.
+     */
+    @Throws(Exception::class)
+    private fun streamAnalysisFromZipBytes(
+        bytes: ByteArray,
+        pathPrefix: String,
+    ): Map<String, Artifact> {
+        LogUtils.d(TAG, "streamAnalysisFromZipBytes: prefix=$pathPrefix size=${bytes.size}")
+        val results = LinkedHashMap<String, Artifact>()
+        ZipInputStream(ByteArrayInputStream(bytes)).use { zis ->
+            while (true) {
+                val entry = zis.nextEntry ?: break
+                if (entry.isDirectory) {
+                    zis.closeEntry()
+                    continue
+                }
+                val entryBytes = zis.readBytes()
+                zis.closeEntry()
+                val nestedName = entry.name.replace('\\', '/')
+                val resultKey = "$pathPrefix/$nestedName"
+                analyzePath(nestedName) { ByteArrayInputStream(entryBytes) }?.let { artifact ->
+                    results[resultKey] = artifact
                 }
             }
         }
         return results
     }
 
-    /** Analyze entries from a custom source (e.g. encrypted container). */
+    /**
+     * If [path] is a bugreport zip, buffer and expand; otherwise match modules via [analyzePath].
+     */
     @Throws(Exception::class)
-    fun streamAnalysis(entries: Iterable<ReopenableInput>): Map<String, Artifact> {
-        LogUtils.d(TAG, "streamAnalysis: $entries")
-        val results = LinkedHashMap<String, Artifact>()
-        for (entry in entries) {
-            analyzePath(entry.path) { entry.openStream() }?.let { artifact ->
-                results[entry.path] = artifact
-            }
+    private fun analyzeEntry(path: String, openStream: () -> InputStream): Map<String, Artifact> {
+        val normalized = path.replace('\\', '/')
+        if (isBugreportZip(normalized)) {
+            LogUtils.d(TAG, "Expanding nested bugreport zip: $normalized")
+            val bytes = openStream().use { it.readBytes() }
+            return streamAnalysisFromZipBytes(bytes, normalized)
         }
-        return results
+        val artifact = analyzePath(normalized, openStream) ?: return emptyMap()
+        return mapOf(normalized to artifact)
     }
-
-    @Throws(Exception::class)
-    fun streamFileAnalysis(entry: ReopenableInput): Artifact? =
-        analyzePath(entry.path) { entry.openStream() }
 
     /**
      * Match [path] against registered modules and parse with a fresh stream from [openStream] per module.
@@ -103,6 +154,7 @@ class ForensicRunner(private val stringResolver: StringResolver) {
     @Throws(Exception::class)
     private fun analyzePath(path: String, openStream: () -> InputStream): Artifact? {
         if (shouldSkip(path)) {
+            LogUtils.d(TAG, "Skipping path: $path")
             return null
         }
 
@@ -113,6 +165,7 @@ class ForensicRunner(private val stringResolver: StringResolver) {
             return null
         }
         if (moduleIndices.isEmpty()) {
+            LogUtils.d(TAG, "No modules found for path: $path")
             return null
         }
 
@@ -154,11 +207,9 @@ class ForensicRunner(private val stringResolver: StringResolver) {
     private fun shouldSkip(path: String): Boolean {
         val fileName = path.substringAfterLast('/')
         if (fileName in SKIP_FILES) {
-            LogUtils.d(TAG, "Skipping file: $fileName")
             return true
         }
         if (path.startsWith("tmp/")) {
-            LogUtils.d(TAG, "Skipping temporary file: $path")
             return true
         }
         return false
@@ -195,9 +246,7 @@ class ForensicRunner(private val stringResolver: StringResolver) {
                         .relativize(file.toPath())
                         .toString()
                         .replace('\\', '/')
-                    analyzePath(relativePath) { file.inputStream() }?.let { artifact ->
-                        results[relativePath] = artifact
-                    }
+                    results.putAll(analyzeEntry(relativePath) { file.inputStream() })
                 }
             }
         }
@@ -210,7 +259,18 @@ class ForensicRunner(private val stringResolver: StringResolver) {
         fun findModuleIndices(path: String): List<Int> =
             ArtifactModuleRegistry.findModuleIndices(path)
 
-        /* 
+        @JvmStatic
+        fun isBugreportZip(path: String): Boolean {
+            val fileName = path.replace('\\', '/').substringAfterLast('/')
+            return fileName.equals(BUGREPORT_ZIP, ignoreCase = true)
+        }
+
+        /** True if [path] is a nested bugreport zip or matches at least one module. */
+        @JvmStatic
+        fun isAnalyzable(path: String): Boolean =
+            isBugreportZip(path) || findModuleIndices(path).isNotEmpty()
+
+        /*
          * Files to skip when analyzing an aquisition.
          */
         @JvmField
@@ -218,5 +278,8 @@ class ForensicRunner(private val stringResolver: StringResolver) {
             "env.txt",
             "acquisition.json",
         )
+
+        @JvmField
+        val BUGREPORT_ZIP = "bugreport.zip"
     }
 }
