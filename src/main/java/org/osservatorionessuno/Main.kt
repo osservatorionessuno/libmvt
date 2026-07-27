@@ -180,8 +180,6 @@ object Main {
 
         val json = if (pretty) root.toString(2) else root.toString()
         println(json)
-
-        println("Detections count: ${groupedResults.length()}")
     }
 
     private fun loadIndicators(indicatorsDir: Path): Indicators {
