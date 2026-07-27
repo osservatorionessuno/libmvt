@@ -3,6 +3,7 @@ package org.osservatorionessuno
 import org.json.JSONArray
 import org.json.JSONObject
 import org.osservatorionessuno.libmvt.common.logging.LogUtils
+import org.osservatorionessuno.libmvt.android.AcquisitionMetadata
 import org.osservatorionessuno.libmvt.android.ForensicRunner
 import org.osservatorionessuno.libmvt.android.parsers.APKParser
 import org.osservatorionessuno.libmvt.common.AlertLevel
@@ -44,12 +45,17 @@ object Main {
                         println("No APK files found in directory: ${inputPath.absolutePath}")
                     }
                 }
+                0
             } else {
+                val acquisition = AcquisitionMetadata.load(inputPath)
+                if (!cli.json) {
+                    printHeader(cli.indicatorsDir)
+                }
                 val detections = runAnalysis(cli)
                 if (cli.json) {
-                    printJsonDetections(detections, cli.pretty)
+                    printJsonDetections(detections, acquisition, cli.pretty)
                 } else {
-                    printDetections(detections, cli.indicatorsDir)
+                    printDetections(detections, acquisition, cli.indicatorsDir)
                 }
             }
             0
@@ -91,12 +97,20 @@ object Main {
         )
     }
 
-    private fun printDetections(groupedResults: JSONArray, indicatorsDir: Path) {
+    private fun printHeader(indicatorsDir: Path) {
         println("${BuildInfo.NAME} ${BuildInfo.VERSION} analysis results")
         println()
         println("Indicators: $indicatorsDir")
         println()
+    }
 
+    private fun printDetections(
+        groupedResults: JSONArray,
+        acquisition: AcquisitionMetadata?,
+        indicatorsDir: Path,
+    ) {
+        printAcquisitionMetadata(acquisition)
+        
         val groups = (0 until groupedResults.length())
             .map { groupedResults.getJSONObject(it) }
             .filter { parseLevel(it.optString("level")) != AlertLevel.LOG }
@@ -122,6 +136,16 @@ object Main {
         println("Detections count: ${groups.size}")
     }
 
+    private fun printAcquisitionMetadata(acquisition: AcquisitionMetadata?) {
+        if (acquisition == null) return
+        acquisition.createdFormatted?.let { println("Created: $it") }
+        acquisition.completedFormatted?.let { println("Completed: $it") }
+        acquisition.bugbaneVersion?.let { println("Bugbane version: $it") } ?: run {
+            acquisition.androidqfVersion?.let { println("AndroidQF version: $it") }
+        }
+        println()
+    }
+
     private fun printGroup(group: JSONObject) {
         val values = group.optJSONArray("detections")?.let { detections ->
             (0 until detections.length()).mapNotNull { j ->
@@ -145,8 +169,13 @@ object Main {
     private fun parseLevel(name: String): AlertLevel =
         runCatching { AlertLevel.valueOf(name.uppercase()) }.getOrDefault(AlertLevel.INFO)
 
-    private fun printJsonDetections(groupedResults: JSONArray, pretty: Boolean) {
+    private fun printJsonDetections(
+        groupedResults: JSONArray,
+        acquisition: AcquisitionMetadata?,
+        pretty: Boolean,
+    ) {
         val root = JSONObject()
+        acquisition?.let { root.put("acquisition", it.toJsonObject()) }
         root.put("groupedResults", groupedResults)
 
         val json = if (pretty) root.toString(2) else root.toString()
@@ -154,7 +183,7 @@ object Main {
 
         println("Detections count: ${groupedResults.length()}")
     }
-    
+
     private fun loadIndicators(indicatorsDir: Path): Indicators {
         val indicators = Indicators()
 
