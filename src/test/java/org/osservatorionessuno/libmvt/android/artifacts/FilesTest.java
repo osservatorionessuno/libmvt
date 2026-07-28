@@ -8,6 +8,8 @@ import org.osservatorionessuno.libmvt.common.Indicators;
 import org.osservatorionessuno.libmvt.android.artifacts.Files;
 
 import java.io.ByteArrayInputStream;
+import java.io.FileInputStream;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Map;
@@ -46,6 +48,40 @@ public class FilesTest {
         assertEquals(1593109532.0, first.get("mtime"));
         assertEquals("-rw-rw----", first.get("mode"));
         assertEquals(36L, first.get("size"));
+    }
+
+    /**
+     * Parses from a FileInputStream, as ForensicRunner does. ByteArrayInputStream.close()
+     * is a no-op, so it hides read-after-close bugs that abort a real scan.
+     */
+    private static Files parseJsonFile(String content) throws Exception {
+        Path file = java.nio.file.Files
+                .createTempDirectory("mvt-files-json-")
+                .resolve("files.json");
+        java.nio.file.Files.writeString(file, content, StandardCharsets.UTF_8);
+        try (InputStream in = new FileInputStream(file.toFile())) {
+            return parseAndroidArtifact(Files::new, "files.json", in);
+        }
+    }
+
+    @Test
+    public void testParsingJsonLines() throws Exception {
+        Files files = parseJsonFile("""
+                {"path":"/data/local/tmp/a"}
+                {"path":"/data/local/tmp/b"}
+                """);
+        assertEquals(2, files.getResults().size());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> first = (Map<String, Object>) files.getResults().get(0);
+        assertEquals("/data/local/tmp/a", first.get("path"));
+    }
+
+    @Test
+    public void testMalformedJsonIsSkippedNotFatal() throws Exception {
+        assertEquals(0, parseJsonFile("").getResults().size());
+        assertEquals(0, parseJsonFile("   \n").getResults().size());
+        assertEquals(0, parseJsonFile("[{\"path\":\"/data/local/tmp/a\"}").getResults().size());
     }
 
     private static Indicators emptyIndicators() throws Exception {
