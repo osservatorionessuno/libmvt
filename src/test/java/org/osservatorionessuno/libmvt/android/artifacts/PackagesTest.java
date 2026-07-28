@@ -6,7 +6,10 @@ import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Indicators;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -120,6 +123,70 @@ public class PackagesTest {
                 p.detected,
                 DetectionType.IOC_MATCH,
                 List.of("APP_CERT_HASH_SHA256", certSha256, "com.malware.muahaha"));
+    }
+
+    private static void varint(ByteArrayOutputStream o, int v) {
+        while (true) {
+            if ((v & ~0x7F) == 0) { o.write(v); return; }
+            o.write((v & 0x7F) | 0x80);
+            v >>>= 7;
+        }
+    }
+
+    private static byte[] lengthDelimited(int field, byte[] payload) {
+        ByteArrayOutputStream o = new ByteArrayOutputStream();
+        varint(o, (field << 3) | 2);
+        varint(o, payload.length);
+        o.writeBytes(payload);
+        return o.toByteArray();
+    }
+
+    private static byte[] str(int field, String value) {
+        return lengthDelimited(field, value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * One package, one APK, field 8 repeated: signed by two different certificates. This is
+     * what Bugbane's ArtifactProtobuf writes, which loops over file.certificates.
+     */
+    private static byte[] multiSignerPackagesPb(String certA, String certB) {
+        ByteArrayOutputStream file = new ByteArrayOutputStream();
+        file.writeBytes(str(1, "/data/app/com.multi.signer/base.apk"));
+        file.writeBytes(lengthDelimited(8, str(3, certA)));
+        file.writeBytes(lengthDelimited(8, str(3, certB)));
+
+        ByteArrayOutputStream pkg = new ByteArrayOutputStream();
+        pkg.writeBytes(str(1, "com.multi.signer"));
+        pkg.writeBytes(lengthDelimited(7, file.toByteArray()));
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        varint(out, pkg.size());
+        out.writeBytes(pkg.toByteArray());
+        return out.toByteArray();
+    }
+
+    /**
+     * APKs in the wild carry several signing certificates and SignatureParser keeps them all,
+     * so every one has to be matched. An IOC is placed on each, since a parser that kept only
+     * the last would still match certB.
+     */
+    @Test
+    public void testAllSignerCertificatesAreMatchedFromProtobuf() throws Exception {
+        String certA = "1111111111111111111111111111111111111111111111111111111111111111";
+        String certB = "2222222222222222222222222222222222222222222222222222222222222222";
+
+        Packages p = parseAndroidArtifact(Packages::new, "packages.pb",
+                new ByteArrayInputStream(multiSignerPackagesPb(certA, certB)));
+        p.setIndicators(indicatorsFromJson(
+                "{ \"indicators\": [ { \"app:cert.sha256\": [ \""
+                        + certA + "\", \"" + certB + "\" ] } ] }"));
+        p.checkIndicators();
+
+        assertDetectionValue(
+                p.detected,
+                DetectionType.IOC_MATCH,
+                List.of("APP_CERT_HASH_SHA256", certA, "com.multi.signer"));
+        assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, certB);
     }
 
     @Test

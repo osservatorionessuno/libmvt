@@ -87,7 +87,10 @@ public class Packages extends AndroidArtifact {
 
     private Map<String, Object> parsePackageFileRecord(CodedInputStream input) throws IOException {
         Map<String, Object> fileMap = new HashMap<>();
-        Map<String, Object> certificate = null;
+        // An APK can be signed by several certificates, and SignatureParser collects all of
+        // them, so each record appends instead of replacing.
+        List<Map<String, Object>> certificates = new ArrayList<>();
+        fileMap.put("certificates", certificates);
         int tag;
         while ((tag = input.readTag()) != 0) {
             switch (tag >>> 3) {
@@ -98,17 +101,13 @@ public class Packages extends AndroidArtifact {
                 case 5 -> fileMap.put("sha256", ProtobufRecords.readString(input));
                 case 6 -> fileMap.put("sha512", ProtobufRecords.readString(input));
                 case 7 -> fileMap.put("suspicious", input.readBool());
-                // Singular field: the last one wins.
-                case 8 -> certificate = parsePackageCertificateRecord(
+                case 8 -> certificates.add(parsePackageCertificateRecord(
                     CodedInputStream.newInstance(ProtobufRecords.readLengthDelimitedField(input))
-                );
+                ));
                 //case 9 -> fileMap.put("infiles", ProtobufRecords.readString(input));
                 default -> input.skipField(tag);
             }
         }
-        List<Map<String, Object>> certificates = new ArrayList<>();
-        if (certificate != null) certificates.add(certificate);
-        fileMap.put("certificates", certificates);
         fileMap.putIfAbsent("path", "");
         fileMap.putIfAbsent("local_name", "");
         fileMap.putIfAbsent("md5", "");
