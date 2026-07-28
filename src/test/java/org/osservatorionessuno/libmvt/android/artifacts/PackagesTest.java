@@ -5,59 +5,76 @@ import org.osservatorionessuno.libmvt.ResourcesUtils;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Indicators;
+import org.osservatorionessuno.libmvt.common.JvmMapStringResolver;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValue;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.indicatorsFromJson;
-import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.parseAndroidArtifact;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.parseArtifact;
 
 public class PackagesTest {
 
-    private static Packages parseAndroidQfPackages() throws Exception {
-        try (InputStream data = ResourcesUtils.readResource("androidqf/packages.json")) {
-            return parseAndroidArtifact(Packages::new, "packages.json", data);
+    /**
+     * Packages streams: every record is checked and then dropped, so getResults() stays empty.
+     * Decoded records are observed through recordObserver instead, and indicators have to be
+     * set before parse because there is nothing left to re-check afterwards.
+     */
+    private static Packages parse(String path, List<Object> sink, Consumer<Packages> configure)
+            throws Exception {
+        try (InputStream data = ResourcesUtils.readResource("androidqf/" + path)) {
+            return parseArtifact(Packages::new, path, data, packages -> {
+                packages.setStringResolver(new JvmMapStringResolver());
+                packages.setRecordObserver(sink::add);
+                configure.accept(packages);
+            });
         }
     }
 
-    private static Packages parseAndroidQfPackagesProtobuf() throws Exception {
-        try (InputStream data = ResourcesUtils.readResource("androidqf/packages.pb")) {
-            return parseAndroidArtifact(Packages::new, "packages.pb", data);
-        }
+    private static Packages parse(String path, Consumer<Packages> configure) throws Exception {
+        return parse(path, new ArrayList<>(), configure);
+    }
+
+    private static List<Object> records(String path) throws Exception {
+        List<Object> sink = new ArrayList<>();
+        parse(path, sink, p -> { });
+        return sink;
+    }
+
+    private static Packages withIndicators(String path, Indicators indicators) throws Exception {
+        return parse(path, p -> p.setIndicators(indicators));
     }
 
     @Test
     public void testParsingProtobuf() throws Exception {
-        Packages p;
-        try (InputStream data = ResourcesUtils.readResource("androidqf/packages.pb")) {
-            p = parseAndroidArtifact(Packages::new, "packages.pb", data);
-        }
-        assertEquals(7, p.getResults().size());
-        assertTrue(p.getResults().get(0).toString().contains("name=com.whatsapp"));
-        assertTrue(p.getResults().get(0).toString().contains(
+        List<Object> parsed = records("packages.pb");
+        assertEquals(7, parsed.size());
+        assertTrue(parsed.get(0).toString().contains("name=com.whatsapp"));
+        assertTrue(parsed.get(0).toString().contains(
                 "744ed47f8176ec423840344c33e88bd2c96e8988cda0797f3415bb5229efc12b"));
     }
 
     @Test
     public void testPackagesList() throws Exception {
-        Packages p = parseAndroidQfPackages();
-        assertEquals(7, p.getResults().size());
-        assertTrue(p.detected.isEmpty());
+        List<Object> sink = new ArrayList<>();
+        Packages p = parse("packages.json", sink, ignored -> { });
+        assertEquals(7, sink.size());
+        assertTrue(p.getResults().isEmpty());
     }
 
     @Test
     public void testNonAppstoreWarnings() throws Exception {
-        Packages p = parseAndroidQfPackages();
-        p.checkIndicators();
-
-        // Matches the AndroidQF fixture: whatsapp (null installer), revanced + fdroid (browser installer),
-        // apollo (third party store installer).
+        // Matches the AndroidQF fixture: whatsapp (null installer), revanced + fdroid (browser
+        // installer), apollo (third party store installer). Needs no indicators.
+        Packages p = parse("packages.json", ignored -> { });
 
         assertEquals(5, p.detected.size());
 
@@ -70,14 +87,9 @@ public class PackagesTest {
 
     @Test
     public void testPackagesIocPackageNames() throws Exception {
-        Packages p = parseAndroidQfPackages();
-
         // APP_ID IOC for package name.
-        Indicators indicators = indicatorsFromJson(
-                "{ \"indicators\": [ { \"app:id\": [ \"com.malware.blah\" ] } ] }"
-        );
-        p.setIndicators(indicators);
-        p.checkIndicators();
+        Packages p = withIndicators("packages.json", indicatorsFromJson(
+                "{ \"indicators\": [ { \"app:id\": [ \"com.malware.blah\" ] } ] }"));
 
         assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL, "APP_ID");
         assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL, "com.malware.blah");
@@ -85,19 +97,11 @@ public class PackagesTest {
 
     @Test
     public void testPackagesIocSha256() throws Exception {
-        Packages p = parseAndroidQfPackages();
-
         // SHA256 IOC for a package file.
         String sha256 = "31037a27af59d4914906c01ad14a318eee2f3e31d48da8954dca62a99174e3fa";
-        Indicators indicators = indicatorsFromJson(
-                "{ \"indicators\": [ { \"file:hashes.sha256\": [ \"" + sha256 + "\" ] } ] }"
-        );
-        p.setIndicators(indicators);
-        p.checkIndicators();
+        Packages p = withIndicators("packages.json", indicatorsFromJson(
+                "{ \"indicators\": [ { \"file:hashes.sha256\": [ \"" + sha256 + "\" ] } ] }"));
 
-        assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL, "FILE_HASH_SHA256");
-        assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL, sha256);
-        assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL, "com.malware.muahaha");
         assertDetectionValue(
                 p.detected,
                 DetectionType.IOC_MATCH,
@@ -106,19 +110,11 @@ public class PackagesTest {
 
     @Test
     public void testPackagesCertificateHashIoc() throws Exception {
-        Packages p = parseAndroidQfPackages();
-
         // Certificate SHA256 IOC for a package file certificate.
         String certSha256 = "c7e56178748be1441370416d4c10e34817ea0c961eb636c8e9d98e0fd79bf730";
-        Indicators indicators = indicatorsFromJson(
-                "{ \"indicators\": [ { \"app:cert.sha256\": [ \"" + certSha256 + "\" ] } ] }"
-        );
-        p.setIndicators(indicators);
-        p.checkIndicators();
+        Packages p = withIndicators("packages.json", indicatorsFromJson(
+                "{ \"indicators\": [ { \"app:cert.sha256\": [ \"" + certSha256 + "\" ] } ] }"));
 
-        assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL, "APP_CERT_HASH_SHA256");
-        assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL, certSha256);
-        assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL, "com.malware.muahaha");
         assertDetectionValue(
                 p.detected,
                 DetectionType.IOC_MATCH,
@@ -145,10 +141,7 @@ public class PackagesTest {
         return lengthDelimited(field, value.getBytes(StandardCharsets.UTF_8));
     }
 
-    /**
-     * One package, one APK, field 8 repeated: signed by two different certificates. This is
-     * what Bugbane's ArtifactProtobuf writes, which loops over file.certificates.
-     */
+    /** One package, one APK, field 8 repeated: signed by two different certificates. */
     private static byte[] multiSignerPackagesPb(String certA, String certB) {
         ByteArrayOutputStream file = new ByteArrayOutputStream();
         file.writeBytes(str(1, "/data/app/com.multi.signer/base.apk"));
@@ -174,13 +167,18 @@ public class PackagesTest {
     public void testAllSignerCertificatesAreMatchedFromProtobuf() throws Exception {
         String certA = "1111111111111111111111111111111111111111111111111111111111111111";
         String certB = "2222222222222222222222222222222222222222222222222222222222222222";
-
-        Packages p = parseAndroidArtifact(Packages::new, "packages.pb",
-                new ByteArrayInputStream(multiSignerPackagesPb(certA, certB)));
-        p.setIndicators(indicatorsFromJson(
+        Indicators indicators = indicatorsFromJson(
                 "{ \"indicators\": [ { \"app:cert.sha256\": [ \""
-                        + certA + "\", \"" + certB + "\" ] } ] }"));
-        p.checkIndicators();
+                        + certA + "\", \"" + certB + "\" ] } ] }");
+
+        Packages p = parseArtifact(
+                Packages::new,
+                "packages.pb",
+                new ByteArrayInputStream(multiSignerPackagesPb(certA, certB)),
+                packages -> {
+                    packages.setStringResolver(new JvmMapStringResolver());
+                    packages.setIndicators(indicators);
+                });
 
         assertDetectionValue(
                 p.detected,
@@ -191,15 +189,10 @@ public class PackagesTest {
 
     @Test
     public void testPackagesCertificateHashIocFromProtobuf() throws Exception {
-        Packages p = parseAndroidQfPackagesProtobuf();
-
         // Certificate SHA256 IOC, protobuf encoding.
         String certSha256 = "c7e56178748be1441370416d4c10e34817ea0c961eb636c8e9d98e0fd79bf730";
-        Indicators indicators = indicatorsFromJson(
-                "{ \"indicators\": [ { \"app:cert.sha256\": [ \"" + certSha256 + "\" ] } ] }"
-        );
-        p.setIndicators(indicators);
-        p.checkIndicators();
+        Packages p = withIndicators("packages.pb", indicatorsFromJson(
+                "{ \"indicators\": [ { \"app:cert.sha256\": [ \"" + certSha256 + "\" ] } ] }"));
 
         assertDetectionValue(
                 p.detected,

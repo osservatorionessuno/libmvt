@@ -15,6 +15,26 @@ abstract class AndroidArtifact : Artifact() {
     protected fun getString(name: String): String =
         stringResolver?.get(name) ?: ""
 
+    /**
+     * Receives every record a streaming module parses, in order. Lets a caller consume
+     * decoded records (export, display, assertions) without them being retained.
+     */
+    var recordObserver: Consumer<Any>? = null
+
+    /**
+     * Routes a freshly parsed record. Streaming modules call this instead of adding to
+     * [results], so peak memory does not scale with the artifact's size. The record is
+     * checked immediately and then dropped, which means [indicators] must be set *before*
+     * [parse] — afterwards there is nothing left to re-check.
+     */
+    protected fun emit(record: Any) {
+        recordObserver?.accept(record)
+        checkRecord(record)
+    }
+
+    /** Per-record detection logic, for modules that stream via [emit]. */
+    protected open fun checkRecord(record: Any) = Unit
+
     abstract fun paths(): List<String>
 
     @Deprecated("Use forEachLine instead")

@@ -48,8 +48,7 @@ public class Files extends AndroidArtifact {
     private void parseProtobuf(InputStream input) throws IOException {
         ProtobufRecords.forEachDelimited(input, record -> {
             CodedInputStream codedInput = CodedInputStream.newInstance(record);
-            Map<String, Object> file = parseFileRecord(codedInput);
-            results.add(file);
+            emit(parseFileRecord(codedInput));
         });
     }
 
@@ -84,7 +83,7 @@ public class Files extends AndroidArtifact {
                     String key = keys.next();
                     map.put(key, obj.get(key));
                 }
-                results.add(map);
+                emit(map);
             }
         } catch (JSONException ex) {
             // Fallback: input may be JSON lines, one object per line
@@ -100,7 +99,7 @@ public class Files extends AndroidArtifact {
                         map.put(key, obj.get(key));
                     }
                     // Again, no conversion of timestamps; assume preprocessed
-                    results.add(map);
+                    emit(map);
                 } catch (JSONException e2) {
                     // skip invalid lines
                     // TODO: maybe report a better error message (?)
@@ -109,52 +108,56 @@ public class Files extends AndroidArtifact {
         }
     }
 
+    /** Records are checked by {@link #checkRecord} as they stream in; none are retained. */
     @Override
     public void checkIndicators() {
+    }
+
+    @Override
+    protected void checkRecord(Object record) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> file = (Map<String, Object>) record;
+
+        String path = Objects.toString(file.get("path"), "");
+        if (path.isEmpty()) return;
+
+        if (indicators != null
+                && detected.addAll(indicators.matchString(path, IndicatorType.FILE_PATH))) {
+            return; // if any indicator matches, skip the rest
+        }
+
+        for (String suspicious : SUSPICIOUS_PATHS) {
+            if (path.startsWith(suspicious)) {
+                String fileType = "";
+
+                // Determine if the file is executable (Unix mode bits)
+                Object modeVal = file.get("mode");
+                long mode = 0;
+                if (modeVal instanceof Number) {
+                    mode = ((Number) modeVal).longValue();
+                } else if (modeVal instanceof String) {
+                    try {
+                        mode = Long.decode("0" + (String) modeVal);
+                    } catch (NumberFormatException nfe) {
+                        // ignore
+                    }
+                }
+                // executable for owner, group, or others (octal 0100, 0010, 0001)
+                if ((mode & 0111) != 0) { // (S_IXUSR | S_IXGRP | S_IXOTH)
+                    fileType = "executable ";
+                }
+
+                detected.add(new Detection(DetectionType.FILES_SUSPICIOUS_PATH, path, fileType));
+            }
+        }
+
         if (indicators == null) return;
 
-        for (Object obj : results) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> file = (Map<String, Object>) obj;
+        Object sha256Obj = file.get("sha256");
+        String sha256 = (sha256Obj != null) ? sha256Obj.toString() : "";
+        if (sha256.isEmpty()) return;
 
-            String path = Objects.toString(file.get("path"), "");
-            if (path.isEmpty()) continue;
-
-            if (detected.addAll(indicators.matchString(path, IndicatorType.FILE_PATH))) {
-                continue; // if any indicator matches, skip the rest
-            }
-
-            for (String suspicious : SUSPICIOUS_PATHS) {
-                if (path.startsWith(suspicious)) {
-                    String fileType = "";
-
-                    // Determine if the file is executable (Unix mode bits)
-                    Object modeVal = file.get("mode");
-                    long mode = 0;
-                    if (modeVal instanceof Number) {
-                        mode = ((Number) modeVal).longValue();
-                    } else if (modeVal instanceof String) {
-                        try {
-                            mode = Long.decode("0" + (String) modeVal);
-                        } catch (NumberFormatException nfe) {
-                            // ignore
-                        }
-                    }
-                    // executable for owner, group, or others (octal 0100, 0010, 0001)
-                    if ((mode & 0111) != 0) { // (S_IXUSR | S_IXGRP | S_IXOTH)
-                        fileType = "executable ";
-                    }
-
-                    detected.add(new Detection(DetectionType.FILES_SUSPICIOUS_PATH, path, fileType));
-                }
-            }
- 
-            Object sha256Obj = file.get("sha256");
-            String sha256 = (sha256Obj != null) ? sha256Obj.toString() : "";
-            if (sha256.isEmpty()) continue;
-
-            // Check if file hash matches any indicator
-            detected.addAll(indicators.matchString(sha256, IndicatorType.FILE_HASH_SHA256));
-        }
+        // Check if file hash matches any indicator
+        detected.addAll(indicators.matchString(sha256, IndicatorType.FILE_HASH_SHA256));
     }
 }

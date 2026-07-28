@@ -61,7 +61,7 @@ public class Packages extends AndroidArtifact {
         ProtobufRecords.forEachDelimited(input, record -> {
             CodedInputStream codedInput = CodedInputStream.newInstance(record);
             PackageResult result = parsePackageRecord(codedInput);
-            if (result != null) results.add(result);
+            if (result != null) emit(result);
         });
     }
 
@@ -199,72 +199,73 @@ public class Packages extends AndroidArtifact {
 
                     result.files.add(fileMap);
                 }
-                results.add(result);
+                emit(result);
             }
         } catch (JSONException ex) {
             // TODO: Something went wrong
         }
     }
 
+    /** Records are checked by {@link #checkRecord} as they stream in; none are retained. */
     @Override
     public void checkIndicators() {
-        for (Object r : results) {
-            PackageResult result = (PackageResult) r;
+    }
 
-            if (Utils.ROOT_PACKAGES.contains(result.name)) {
-                detected.add(new Detection(DetectionType.PACKAGES_ROOT_PACKAGE, result.name));
-                continue;
-            }
+    @Override
+    protected void checkRecord(Object record) {
+        PackageResult result = (PackageResult) record;
 
-            if ("null".equals(result.installer) && !result.system) {
-                detected.add(new Detection(DetectionType.PACKAGES_ADB_INSTALLED, result.name));
-            } else if (Utils.THIRD_PARTY_STORE_INSTALLERS.contains(result.installer)) {
-                detected.add(new Detection(DetectionType.PACKAGES_THIRD_PARTY_STORE_INSTALLED,
-                    result.name, result.installer));
-            } else if (Utils.BROWSER_INSTALLERS.contains(result.installer)) {
-                detected.add(new Detection(DetectionType.PACKAGES_BROWSER_INSTALLED,
-                    result.name, result.installer));
-            }
+        if (Utils.ROOT_PACKAGES.contains(result.name)) {
+            detected.add(new Detection(DetectionType.PACKAGES_ROOT_PACKAGE, result.name));
+            return;
+        }
 
+        if ("null".equals(result.installer) && !result.system) {
+            detected.add(new Detection(DetectionType.PACKAGES_ADB_INSTALLED, result.name));
+        } else if (Utils.THIRD_PARTY_STORE_INSTALLERS.contains(result.installer)) {
+            detected.add(new Detection(DetectionType.PACKAGES_THIRD_PARTY_STORE_INSTALLED,
+                result.name, result.installer));
+        } else if (Utils.BROWSER_INSTALLERS.contains(result.installer)) {
+            detected.add(new Detection(DetectionType.PACKAGES_BROWSER_INSTALLED,
+                result.name, result.installer));
+        }
 
-            if (Utils.SECURITY_PACKAGES.contains(result.name) && result.disabled) {
-                detected.add(new Detection(DetectionType.PACKAGES_SECURITY_DISABLED, result.name));
-            }
+        if (Utils.SECURITY_PACKAGES.contains(result.name) && result.disabled) {
+            detected.add(new Detection(DetectionType.PACKAGES_SECURITY_DISABLED, result.name));
+        }
 
-            if (Utils.SYSTEM_UPDATE_PACKAGES.contains(result.name) && result.disabled) {
-                detected.add(new Detection(DetectionType.PACKAGES_SYSTEM_UPDATE_DISABLED, result.name));
-            }
+        if (Utils.SYSTEM_UPDATE_PACKAGES.contains(result.name) && result.disabled) {
+            detected.add(new Detection(DetectionType.PACKAGES_SYSTEM_UPDATE_DISABLED, result.name));
+        }
 
-            // Continnue instead of returning because we want to check indicators for all packages.
-            if (indicators == null) continue;
+        if (indicators == null) return;
 
-            detected.addAll(indicators.matchString(result.name, IndicatorType.APP_ID));
-            for (Map<String, Object> packageFile : result.files) {
-                addPackageIocMatches(result.name, (String) packageFile.get("path"), IndicatorType.FILE_PATH);
-                addPackageIocMatches(result.name, (String) packageFile.get("md5"), IndicatorType.FILE_HASH_MD5);
-                addPackageIocMatches(result.name, (String) packageFile.get("sha1"), IndicatorType.FILE_HASH_SHA1);
-                addPackageIocMatches(result.name, (String) packageFile.get("sha256"), IndicatorType.FILE_HASH_SHA256);
+        detected.addAll(indicators.matchString(result.name, IndicatorType.APP_ID));
+        for (Map<String, Object> packageFile : result.files) {
+            addPackageIocMatches(result.name, (String) packageFile.get("path"), IndicatorType.FILE_PATH);
+            addPackageIocMatches(result.name, (String) packageFile.get("md5"), IndicatorType.FILE_HASH_MD5);
+            addPackageIocMatches(result.name, (String) packageFile.get("sha1"), IndicatorType.FILE_HASH_SHA1);
+            addPackageIocMatches(result.name, (String) packageFile.get("sha256"), IndicatorType.FILE_HASH_SHA256);
 
-                Object certificatesObj = packageFile.get("certificates");
-                if (!(certificatesObj instanceof List<?> certList)) continue;
+            Object certificatesObj = packageFile.get("certificates");
+            if (!(certificatesObj instanceof List<?> certList)) continue;
 
-                for (Object certObj : certList) {
-                    if (!(certObj instanceof Map<?, ?> certAny)) continue;
+            for (Object certObj : certList) {
+                if (!(certObj instanceof Map<?, ?> certAny)) continue;
 
-                    Object md5Obj = certAny.get("md5");
-                    Object sha1Obj = certAny.get("sha1");
-                    Object sha256Obj = certAny.get("sha256");
+                Object md5Obj = certAny.get("md5");
+                Object sha1Obj = certAny.get("sha1");
+                Object sha256Obj = certAny.get("sha256");
 
-                    addPackageIocMatches(result.name,
-                            md5Obj instanceof String ? (String) md5Obj : null,
-                            IndicatorType.APP_CERT_HASH_MD5);
-                    addPackageIocMatches(result.name,
-                            sha1Obj instanceof String ? (String) sha1Obj : null,
-                            IndicatorType.APP_CERT_HASH_SHA1);
-                    addPackageIocMatches(result.name,
-                            sha256Obj instanceof String ? (String) sha256Obj : null,
-                            IndicatorType.APP_CERT_HASH_SHA256);
-                }
+                addPackageIocMatches(result.name,
+                        md5Obj instanceof String ? (String) md5Obj : null,
+                        IndicatorType.APP_CERT_HASH_MD5);
+                addPackageIocMatches(result.name,
+                        sha1Obj instanceof String ? (String) sha1Obj : null,
+                        IndicatorType.APP_CERT_HASH_SHA1);
+                addPackageIocMatches(result.name,
+                        sha256Obj instanceof String ? (String) sha256Obj : null,
+                        IndicatorType.APP_CERT_HASH_SHA256);
             }
         }
     }
