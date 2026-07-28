@@ -128,25 +128,7 @@ public class Files extends AndroidArtifact {
 
         for (String suspicious : SUSPICIOUS_PATHS) {
             if (path.startsWith(suspicious)) {
-                String fileType = "";
-
-                // Determine if the file is executable (Unix mode bits)
-                Object modeVal = file.get("mode");
-                long mode = 0;
-                if (modeVal instanceof Number) {
-                    mode = ((Number) modeVal).longValue();
-                } else if (modeVal instanceof String) {
-                    try {
-                        mode = Long.decode("0" + (String) modeVal);
-                    } catch (NumberFormatException nfe) {
-                        // ignore
-                    }
-                }
-                // executable for owner, group, or others (octal 0100, 0010, 0001)
-                if ((mode & 0111) != 0) { // (S_IXUSR | S_IXGRP | S_IXOTH)
-                    fileType = "executable ";
-                }
-
+                String fileType = isExecutable(file.get("mode")) ? "executable " : "";
                 detected.add(new Detection(DetectionType.FILES_SUSPICIOUS_PATH, path, fileType));
             }
         }
@@ -159,5 +141,49 @@ public class Files extends AndroidArtifact {
 
         // Check if file hash matches any indicator
         detected.addAll(indicators.matchString(sha256, IndicatorType.FILE_HASH_SHA256));
+    }
+
+    /**
+     * True if any of the owner, group or other execute bits are set.
+     *
+     * <p>Producers disagree on the encoding: {@code find -printf '%m'} yields octal digits
+     * ("755"), while androidqf's collector yields a symbolic string ("-rwxr-xr-x"). Devices
+     * whose find lacks -printf supply no mode at all.
+     */
+    private static boolean isExecutable(Object modeVal) {
+        if (modeVal instanceof Number) {
+            return (((Number) modeVal).longValue() & 0111) != 0;
+        }
+        if (!(modeVal instanceof String)) return false;
+
+        String mode = ((String) modeVal).trim();
+        if (mode.isEmpty()) return false;
+
+        if (isOctalDigits(mode)) {
+            try {
+                return (Long.parseLong(mode, 8) & 0111) != 0;
+            } catch (NumberFormatException nfe) {
+                return false;
+            }
+        }
+
+        // Symbolic: an optional leading file-type char then three rwx triads. A lowercase x
+        // is plain execute; s and t are setuid/setgid/sticky *with* execute, whereas the
+        // uppercase forms mean the bit is set without it.
+        String bits = (mode.length() == 10) ? mode.substring(1) : mode;
+        if (bits.length() != 9) return false;
+        for (int i = 2; i < 9; i += 3) {
+            char c = bits.charAt(i);
+            if (c == 'x' || c == 's' || c == 't') return true;
+        }
+        return false;
+    }
+
+    private static boolean isOctalDigits(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c < '0' || c > '7') return false;
+        }
+        return true;
     }
 }

@@ -137,6 +137,40 @@ public class FilesTest {
         assertDetectionValueContains(files.detected, DetectionType.FILES_SUSPICIOUS_PATH, "/data/local/tmp/evil");
     }
 
+    /**
+     * The executable marker has to survive both mode encodings: find -printf '%m' gives octal
+     * digits, androidqf's collector gives a symbolic string.
+     */
+    @Test
+    public void testExecutableMarkerAcrossModeEncodings() throws Exception {
+        assertEquals("executable ", fileTypeFor("\"755\""));
+        assertEquals("executable ", fileTypeFor("\"0755\""));
+        assertEquals("executable ", fileTypeFor("\"-rwxr-xr-x\""));
+        assertEquals("executable ", fileTypeFor("\"-rwsr-xr-x\""));
+        assertEquals("executable ", fileTypeFor("\"rwxr-xr-x\""));
+        assertEquals("executable ", fileTypeFor("493"));
+
+        assertEquals("", fileTypeFor("\"644\""));
+        assertEquals("", fileTypeFor("\"-rw-r--r--\""));
+        assertEquals("", fileTypeFor("\"-rw-rw----\""));
+        // uppercase S is setuid without execute
+        assertEquals("", fileTypeFor("\"-rwSr--r--\""));
+        assertEquals("", fileTypeFor("null"));
+        assertEquals("", fileTypeFor("\"\""));
+    }
+
+    /** Second value of the FILES_SUSPICIOUS_PATH detection for a given JSON mode literal. */
+    private static String fileTypeFor(String modeJson) throws Exception {
+        List<Object> sink = new ArrayList<>();
+        Files files = parse(
+                "files.json",
+                json("[{\"path\":\"/data/local/tmp/x\",\"mode\":" + modeJson + "}]"),
+                sink,
+                f -> { });
+        assertEquals(1, files.detected.size(), "mode=" + modeJson);
+        return files.detected.get(0).getValue().get(1);
+    }
+
     @Test
     public void testIocFileHash() throws Exception {
         String sha256 = "87e7e7a28ab69fbc377f60ba5c5640d31735cf8eb9af4de35f78b40e0e2970b1";
