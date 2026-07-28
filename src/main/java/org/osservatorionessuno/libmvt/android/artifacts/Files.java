@@ -71,9 +71,11 @@ public class Files extends AndroidArtifact {
     }
 
     private void parseJson(InputStream input) throws IOException {
+        // Read once: collectText closes the stream, so the fallback below reuses the text.
+        String content = collectText(input);
         try {
             // Try to parse the input as a JSON array
-            JSONArray arr = new JSONArray(collectText(input));
+            JSONArray arr = new JSONArray(content);
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject obj = arr.getJSONObject(i);
                 Map<String, Object> map = new HashMap<>();
@@ -86,8 +88,7 @@ public class Files extends AndroidArtifact {
             }
         } catch (JSONException ex) {
             // Fallback: input may be JSON lines, one object per line
-            // TODO: I think this wont work cause Text was already collected.
-            for (String line : collectLines(input)) {
+            for (String line : content.split("\\R")) {
                 String trimmed = line.trim();
                 if (trimmed.isEmpty()) continue;
                 try {
