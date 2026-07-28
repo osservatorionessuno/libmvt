@@ -23,6 +23,12 @@ public class PackagesTest {
         }
     }
 
+    private static Packages parseAndroidQfPackagesProtobuf() throws Exception {
+        try (InputStream data = ResourcesUtils.readResource("androidqf/packages.pb")) {
+            return parseAndroidArtifact(Packages::new, "packages.pb", data);
+        }
+    }
+
     @Test
     public void testParsingProtobuf() throws Exception {
         Packages p;
@@ -110,6 +116,24 @@ public class PackagesTest {
         assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL, "APP_CERT_HASH_SHA256");
         assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL, certSha256);
         assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL, "com.malware.muahaha");
+        assertDetectionValue(
+                p.detected,
+                DetectionType.IOC_MATCH,
+                List.of("APP_CERT_HASH_SHA256", certSha256, "com.malware.muahaha"));
+    }
+
+    @Test
+    public void testPackagesCertificateHashIocFromProtobuf() throws Exception {
+        Packages p = parseAndroidQfPackagesProtobuf();
+
+        // Certificate SHA256 IOC, protobuf encoding.
+        String certSha256 = "c7e56178748be1441370416d4c10e34817ea0c961eb636c8e9d98e0fd79bf730";
+        Indicators indicators = indicatorsFromJson(
+                "{ \"indicators\": [ { \"app:cert.sha256\": [ \"" + certSha256 + "\" ] } ] }"
+        );
+        p.setIndicators(indicators);
+        p.checkIndicators();
+
         assertDetectionValue(
                 p.detected,
                 DetectionType.IOC_MATCH,
