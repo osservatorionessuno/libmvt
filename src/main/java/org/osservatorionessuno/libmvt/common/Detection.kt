@@ -162,6 +162,14 @@ enum class DetectionType(
         "mvt_anr_package_name_title",
         "mvt_anr_package_name_message",
     ),
+
+    /** A module failed on an artifact, so that artifact was not analysed. */
+    ARTIFACT_PARSE_FAILED(
+        "artifact_parse_failed",
+        AlertLevel.INFO,
+        "mvt_artifact_parse_failed_title",
+        "mvt_artifact_parse_failed_message",
+    ),
     ;
 
     companion object {

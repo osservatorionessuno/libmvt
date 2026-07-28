@@ -3,6 +3,8 @@ package org.osservatorionessuno.libmvt.android
 import org.osservatorionessuno.libmvt.android.artifacts.AndroidArtifact
 import org.osservatorionessuno.libmvt.common.AbstractInput
 import org.osservatorionessuno.libmvt.common.Artifact
+import org.osservatorionessuno.libmvt.common.Detection
+import org.osservatorionessuno.libmvt.common.DetectionType
 import org.osservatorionessuno.libmvt.common.Indicators
 import org.osservatorionessuno.libmvt.common.ReopenableInput
 import org.osservatorionessuno.libmvt.common.StringResolver
@@ -10,12 +12,25 @@ import org.osservatorionessuno.libmvt.common.logging.LogUtils
 import java.io.File
 import java.io.InputStream
 import java.util.LinkedHashMap
+import java.util.concurrent.CancellationException
 import java.util.zip.ZipFile
 
 class ArtifactInput(
     path: String,
     inputStream: InputStream,
 ) : AbstractInput(path, inputStream)
+
+/**
+ * Placeholder for a path whose modules all failed, so the failure still reaches the report.
+ * Not registered in [ArtifactModuleRegistry]; it only carries [Artifact.detected].
+ */
+private class SkippedArtifact : AndroidArtifact() {
+    override fun paths(): List<String> = emptyList()
+
+    override fun parse(artifactInput: AbstractInput) = Unit
+
+    override fun checkIndicators() = Unit
+}
 
 /**
  * Simple helper to run the available AndroidQF artifact parsers on a folder
@@ -26,6 +41,7 @@ class ArtifactInput(
  * - Every matching module receives an [ArtifactInput]; only the module should read its stream.
  * - Custom stream sources use [ReopenableInput] so each module gets a fresh stream.
  * - A fresh module instance is created per parse; results are then merged.
+ * - A module that throws is dropped and logged; the rest of the acquisition still runs.
  * - [SKIP_FILES] and paths under `tmp/` are ignored.
  */
 class ForensicRunner(private val stringResolver: StringResolver) {
@@ -90,7 +106,12 @@ class ForensicRunner(private val stringResolver: StringResolver) {
             return null
         }
 
-        val moduleIndices = ArtifactModuleRegistry.findModuleIndices(path)
+        val moduleIndices = try {
+            ArtifactModuleRegistry.findModuleIndices(path)
+        } catch (e: Exception) {
+            LogUtils.w(TAG, "Cannot match modules for $path: $e")
+            return null
+        }
         if (moduleIndices.isEmpty()) {
             return null
         }
@@ -98,15 +119,34 @@ class ForensicRunner(private val stringResolver: StringResolver) {
         LogUtils.d(TAG, "analyzePath: $path -> modules $moduleIndices")
 
         var merged: AndroidArtifact? = null
+        val failures = mutableListOf<Detection>()
         for (index in moduleIndices) {
-            openStream().use { stream ->
-                val module = ArtifactModuleRegistry.create(index)
-                module.parse(ArtifactInput(path, stream))
-                finalizeArtifact(module)
-                merged = mergeInto(merged, module)
+            val module = ArtifactModuleRegistry.create(index)
+            try {
+                openStream().use { stream ->
+                    module.parse(ArtifactInput(path, stream))
+                    finalizeArtifact(module)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (Thread.currentThread().isInterrupted) throw e
+                // A truncated or malformed artifact drops its module, not the acquisition.
+                LogUtils.w(TAG, "Skipping ${module.javaClass.simpleName} for $path: $e")
+                // Path first: the CLI renders only the value, not the grouped file key.
+                failures.add(Detection(DetectionType.ARTIFACT_PARSE_FAILED, path, module.javaClass.simpleName))
+                continue
             }
+            merged = mergeInto(merged, module)
         }
-        return merged
+
+        if (failures.isEmpty()) {
+            return merged
+        }
+        // Report the lost coverage: a missing detection here means "not analysed", not "clean".
+        val carrier = merged ?: SkippedArtifact()
+        carrier.detected.addAll(failures)
+        return carrier
     }
 
     private fun shouldSkip(path: String): Boolean {
