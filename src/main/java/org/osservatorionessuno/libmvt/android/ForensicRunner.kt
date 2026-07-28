@@ -124,8 +124,10 @@ class ForensicRunner(private val stringResolver: StringResolver) {
             val module = ArtifactModuleRegistry.create(index)
             try {
                 openStream().use { stream ->
+                    // Before parse: streaming modules check each record as it is decoded.
+                    prepareArtifact(module)
                     module.parse(ArtifactInput(path, stream))
-                    finalizeArtifact(module)
+                    module.checkIndicators()
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -171,14 +173,12 @@ class ForensicRunner(private val stringResolver: StringResolver) {
         return existing
     }
 
-    private fun finalizeArtifact(artifact: AndroidArtifact): Artifact {
+    private fun prepareArtifact(artifact: AndroidArtifact) {
         artifact.stringResolver = stringResolver
         indicators?.let { ind ->
             ind.setStringResolver(stringResolver)
             artifact.indicators = ind
-            artifact.checkIndicators()
         }
-        return artifact
     }
 
     private fun collectFromDirectory(
