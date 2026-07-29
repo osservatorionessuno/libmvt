@@ -17,6 +17,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -240,6 +241,45 @@ public class ForensicRunnerTest {
 
         assertTrue(res.containsKey(TOMBSTONE_KEY));
         assertTrue(res.get(TOMBSTONE_KEY).getResults().size() > 0);
+    }
+
+    @Test
+    public void testNestedZipReopensWantedEntriesAndSkipsTheRest() throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ZipOutputStream zipOut = new ZipOutputStream(bos)) {
+            zipOut.putNextEntry(new ZipEntry("dumpsys.txt"));
+            zipOut.write(readResourceBytes("androidqf/dumpsys.txt"));
+            zipOut.closeEntry();
+            zipOut.putNextEntry(new ZipEntry("getprop.txt"));
+            zipOut.write(readResourceBytes("androidqf/getprop.txt"));
+            zipOut.closeEntry();
+            // No module asks for this one, so it must never be opened, let alone read.
+            zipOut.putNextEntry(new ZipEntry("FS/data/junk.bin"));
+            zipOut.write(new byte[4096]);
+            zipOut.closeEntry();
+        }
+        byte[] bugreportBytes = bos.toByteArray();
+
+        AtomicInteger opens = new AtomicInteger();
+        ReopenableInput input = ReopenableInput.of("bugreport.zip", () -> {
+            opens.incrementAndGet();
+            return new ByteArrayInputStream(bugreportBytes);
+        });
+
+        ForensicRunner runner = new ForensicRunner(new JvmMapStringResolver());
+        Map<String, Artifact> res = runner.streamFileAnalysis(input);
+
+        assertTrue(res.containsKey("bugreport.zip/dumpsys.txt"));
+        assertTrue(res.containsKey("bugreport.zip/getprop.txt"));
+        assertFalse(res.containsKey("bugreport.zip/FS/data/junk.bin"));
+        assertTrue(res.get("bugreport.zip/dumpsys.txt").getResults().size() > 0);
+
+        // One pass to list the entries, then one reopen per module: nothing is buffered, and
+        // junk.bin costs no opens at all.
+        int expectedOpens = 1
+                + ForensicRunner.findModuleIndices("dumpsys.txt").size()
+                + ForensicRunner.findModuleIndices("getprop.txt").size();
+        assertEquals(expectedOpens, opens.get());
     }
 
     private static byte[] zipBugreportFixture() throws IOException {
