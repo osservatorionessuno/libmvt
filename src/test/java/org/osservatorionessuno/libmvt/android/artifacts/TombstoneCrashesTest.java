@@ -2,14 +2,14 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
-import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
+import org.osservatorionessuno.libmvt.common.Detection;
 import org.osservatorionessuno.libmvt.common.DetectionType;
-import org.osservatorionessuno.libmvt.common.JvmMapStringResolver;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +21,8 @@ import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDet
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValue;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.indicatorsFromJson;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.streamArtifact;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.streamRecords;
 
 public class TombstoneCrashesTest {
 
@@ -31,14 +33,15 @@ public class TombstoneCrashesTest {
 
     @Test
     public void testParsing() throws Exception {
-        TombstoneCrashes tc = new TombstoneCrashes();
-        InputStream data = ResourcesUtils.readResource("android_data/tombstone_process.txt");
-        tc.parse(new AbstractInput("dummy", data) {});
+        List<Object> parsed = streamRecords(
+                TombstoneCrashes::new,
+                "dummy",
+                ResourcesUtils.readResource("android_data/tombstone_process.txt"));
 
-        assertEquals(1, tc.getResults().size());
+        assertEquals(1, parsed.size());
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> rec = (Map<String, Object>) tc.getResults().get(0);
+        Map<String, Object> rec = (Map<String, Object>) parsed.get(0);
         assertEquals("mtk.ape.decoder", rec.get("process_name"));
         assertEquals(25541, rec.get("pid"));
         assertEquals(21307, rec.get("tid"));
@@ -64,16 +67,16 @@ public class TombstoneCrashesTest {
 
     @Test
     public void testParseProtobuf() throws Exception {
-        TombstoneCrashes tc = new TombstoneCrashes();
         byte[] data = readResourceBytes("android_data/tombstone_process.pb");
-        tc.parse(new AbstractInput(
+        List<Object> parsed = streamRecords(
+                TombstoneCrashes::new,
                 "FS/data/tombstones/tombstone_process.pb",
-                new ByteArrayInputStream(data)) {});
+                new ByteArrayInputStream(data));
 
-        assertEquals(1, tc.getResults().size());
+        assertEquals(1, parsed.size());
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> rec = (Map<String, Object>) tc.getResults().get(0);
+        Map<String, Object> rec = (Map<String, Object>) parsed.get(0);
         assertEquals("mtk.ape.decoder", rec.get("process_name"));
         assertEquals(25541, rec.get("pid"));
         assertEquals(1046, rec.get("uid"));
@@ -225,52 +228,47 @@ public class TombstoneCrashesTest {
     @Test
     public void testCheckIndicatorsIgnoresNonSuspiciousUid() throws Exception {
         // Fixture uid 1046 (mediacodec) must not raise TOMBSTONE_CRASHES_UID.
-        TombstoneCrashes tc = new TombstoneCrashes();
-        tc.setStringResolver(new JvmMapStringResolver());
+        TombstoneCrashes tc;
         try (InputStream data = ResourcesUtils.readResource("android_data/tombstone_process.txt")) {
-            tc.parse(new AbstractInput("tombstone_process", data) {});
+            tc = streamArtifact(
+                    TombstoneCrashes::new,
+                    "tombstone_process",
+                    data,
+                    indicatorsFromJson("{ \"indicators\": [] }"));
         }
-        tc.setIndicators(indicatorsFromJson("{ \"indicators\": [] }"));
-        tc.checkIndicators();
 
         assertDetectionCount(tc.detected, DetectionType.TOMBSTONE_CRASHES_UID, 0);
     }
 
     @Test
     public void testCheckIndicatorsWithoutIndicatorsDoesNothing() throws Exception {
-        TombstoneCrashes tc = new TombstoneCrashes();
         String dump = String.join("\n",
                 "Timestamp: 2026-01-01 00:00:00.000000+0000",
                 "pid: 1, tid: 1, name: init  >>> /system/bin/init <<<",
                 "uid: 0");
-        tc.parse(new AbstractInput(
-                "tombstone",
-                new ByteArrayInputStream(dump.getBytes(StandardCharsets.UTF_8))) {});
-        tc.checkIndicators();
+        TombstoneCrashes tc = streamArtifact(TombstoneCrashes::new, "tombstone", stream(dump));
         assertTrue(tc.detected.isEmpty());
     }
 
     @Test
     public void testCheckIndicatorsKeepsDistinctTimestamps() throws Exception {
-        TombstoneCrashes tc = new TombstoneCrashes();
-        tc.setStringResolver(new JvmMapStringResolver());
-        tc.setIndicators(indicatorsFromJson("{ \"indicators\": [] }"));
-
         // Same binary/uid at two times must not collapse when detections are grouped by value.
-        tc.getResults().add(Map.of(
-                "binary_path", "/vendor/bin/hw/android.hardware.biometrics.fingerprint-service.goodix",
-                "uid", 1000,
-                "timestamp", "2026-07-16 13:10:28.933796"));
-        tc.getResults().add(Map.of(
-                "binary_path", "/vendor/bin/hw/android.hardware.biometrics.fingerprint-service.goodix",
-                "uid", 1000,
-                "timestamp", "2026-03-16 17:15:00.099791"));
-        tc.checkIndicators();
+        // Two crashes are two tombstone files, so they reach the report as two artifacts.
+        String binary = "/vendor/bin/hw/android.hardware.biometrics.fingerprint-service.goodix";
+        List<Detection> all = new ArrayList<>();
+        for (String timestamp : List.of("2026-07-16 13:10:28.933796", "2026-03-16 17:15:00.099791")) {
+            String dump = String.join("\n",
+                    "Timestamp: " + timestamp + "+0000",
+                    "Cmdline: " + binary,
+                    "pid: 1348, ppid: 1, tid: 1910, name: android.hardwar  >>> " + binary + " <<<",
+                    "uid: 1000");
+            all.addAll(parseWithEmptyIndicators(dump).detected);
+        }
 
-        assertDetectionCount(tc.detected, DetectionType.TOMBSTONE_CRASHES_UID, 2);
+        assertDetectionCount(all, DetectionType.TOMBSTONE_CRASHES_UID, 2);
         assertEquals(
                 2,
-                org.osservatorionessuno.libmvt.common.GroupedDetection.group(tc.detected, null)
+                org.osservatorionessuno.libmvt.common.GroupedDetection.group(all, null)
                         .stream()
                         .filter(g -> DetectionType.TOMBSTONE_CRASHES_UID.getId().equals(g.getId()))
                         .findFirst()
@@ -281,15 +279,15 @@ public class TombstoneCrashesTest {
 
     @Test
     public void testCheckIndicators() throws Exception {
-        TombstoneCrashes tc = new TombstoneCrashes();
-        tc.setStringResolver(new JvmMapStringResolver());
+        TombstoneCrashes tc;
         try (InputStream data = ResourcesUtils.readResource("android_data/tombstone_process.txt")) {
-            tc.parse(new AbstractInput("tombstone_process", data) {});
+            tc = streamArtifact(
+                    TombstoneCrashes::new,
+                    "tombstone_process",
+                    data,
+                    indicatorsFromJson(
+                            "{ \"indicators\": [ { \"process:name\": [ \"mtk.ape.decoder\" ] } ] }"));
         }
-
-        tc.setIndicators(indicatorsFromJson(
-                "{ \"indicators\": [ { \"process:name\": [ \"mtk.ape.decoder\" ] } ] }"));
-        tc.checkIndicators();
 
         assertFalse(tc.detected.isEmpty());
         assertDetection(tc.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL);
@@ -304,14 +302,12 @@ public class TombstoneCrashesTest {
                 "pid: 9, tid: 9, name: evil.hardware.  >>> /vendor/bin/hw/evil.hardware.service <<<",
                 "uid: 1046");
 
-        TombstoneCrashes tc = new TombstoneCrashes();
-        tc.setStringResolver(new JvmMapStringResolver());
-        tc.parse(new AbstractInput(
+        TombstoneCrashes tc = streamArtifact(
+                TombstoneCrashes::new,
                 "tombstone",
-                new ByteArrayInputStream(dump.getBytes(StandardCharsets.UTF_8))) {});
-        tc.setIndicators(indicatorsFromJson(
-                "{ \"indicators\": [ { \"process:name\": [ \"evil.hardware.service\" ] } ] }"));
-        tc.checkIndicators();
+                stream(dump),
+                indicatorsFromJson(
+                        "{ \"indicators\": [ { \"process:name\": [ \"evil.hardware.service\" ] } ] }"));
 
         assertDetection(tc.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL);
         assertDetectionValueContains(
@@ -366,14 +362,13 @@ public class TombstoneCrashesTest {
                 "open files:",
                 "    fd 3: /data/local/tmp/payload (unowned)");
 
-        TombstoneCrashes tc = new TombstoneCrashes();
-        tc.setStringResolver(new JvmMapStringResolver());
-        tc.parse(new AbstractInput(
+        TombstoneCrashes tc = streamArtifact(
+                TombstoneCrashes::new,
                 "tombstone",
-                new ByteArrayInputStream(dump.getBytes(StandardCharsets.UTF_8))) {});
-        tc.setIndicators(indicatorsFromJson(
-                "{ \"indicators\": [ { \"file:path\": [ \"/data/local/tmp/evil.so\", \"/data/local/tmp/payload\" ] } ] }"));
-        tc.checkIndicators();
+                stream(dump),
+                indicatorsFromJson(
+                        "{ \"indicators\": [ { \"file:path\": [ \"/data/local/tmp/evil.so\","
+                                + " \"/data/local/tmp/payload\" ] } ] }"));
 
         assertDetection(tc.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL);
         assertDetectionValueContains(tc.detected, DetectionType.IOC_MATCH, "/data/local/tmp/evil.so");
@@ -381,24 +376,22 @@ public class TombstoneCrashesTest {
     }
 
     private static Map<String, Object> parseText(String dump) throws Exception {
-        TombstoneCrashes tc = new TombstoneCrashes();
-        tc.parse(new AbstractInput(
-                "tombstone",
-                new ByteArrayInputStream(dump.getBytes(StandardCharsets.UTF_8))) {});
-        assertEquals(1, tc.getResults().size());
+        List<Object> parsed = streamRecords(TombstoneCrashes::new, "tombstone", stream(dump));
+        assertEquals(1, parsed.size());
         @SuppressWarnings("unchecked")
-        Map<String, Object> rec = (Map<String, Object>) tc.getResults().get(0);
+        Map<String, Object> rec = (Map<String, Object>) parsed.get(0);
         return rec;
     }
 
     private static TombstoneCrashes parseWithEmptyIndicators(String dump) throws Exception {
-        TombstoneCrashes tc = new TombstoneCrashes();
-        tc.setStringResolver(new JvmMapStringResolver());
-        tc.parse(new AbstractInput(
+        return streamArtifact(
+                TombstoneCrashes::new,
                 "tombstone",
-                new ByteArrayInputStream(dump.getBytes(StandardCharsets.UTF_8))) {});
-        tc.setIndicators(indicatorsFromJson("{ \"indicators\": [] }"));
-        tc.checkIndicators();
-        return tc;
+                stream(dump),
+                indicatorsFromJson("{ \"indicators\": [] }"));
+    }
+
+    private static InputStream stream(String dump) {
+        return new ByteArrayInputStream(dump.getBytes(StandardCharsets.UTF_8));
     }
 }

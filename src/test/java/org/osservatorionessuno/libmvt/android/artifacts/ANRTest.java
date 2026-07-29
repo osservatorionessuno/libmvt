@@ -2,32 +2,33 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
-import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.DetectionType;
-import org.osservatorionessuno.libmvt.common.JvmMapStringResolver;
 
-import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetection;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
-import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.runIocCheck;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.loadTestIndicators;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.streamArtifact;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.streamRecords;
 
 public class ANRTest {
 
+    private static final String ANR_PATH = "FS/data/anr/anr_2026-03-28-01-20-41-432";
+
     @Test
     public void testParsing() throws Exception {
-        ANR anr = new ANR();
-        InputStream data = ResourcesUtils.readResource("android_data/anr_process.txt");
-        anr.parse(new AbstractInput("FS/data/anr/anr_2026-03-28-01-20-41-432", data) {});
-
-        assertEquals(1, anr.getResults().size());
+        List<Object> parsed = streamRecords(
+                ANR::new,
+                ANR_PATH,
+                ResourcesUtils.readResource("android_data/anr_process.txt"));
+        assertEquals(1, parsed.size());
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> rec = (Map<String, Object>) anr.getResults().get(0);
+        Map<String, Object> rec = (Map<String, Object>) parsed.get(0);
         assertEquals(
                 "Input dispatching timed out (Application does not have a focused window).",
                 rec.get("subject"));
@@ -41,13 +42,10 @@ public class ANRTest {
 
     @Test
     public void testCheckIndicators() throws Exception {
-        ANR anr = new ANR();
-        anr.setStringResolver(new JvmMapStringResolver());
+        ANR anr;
         try (var data = ResourcesUtils.readResource("android_data/anr_process.txt")) {
-            anr.parse(new AbstractInput("FS/data/anr/anr_2026-03-28-01-20-41-432", data) {});
+            anr = streamArtifact(ANR::new, ANR_PATH, data, loadTestIndicators());
         }
-
-        runIocCheck(anr);
 
         assertFalse(anr.detected.isEmpty());
         assertDetection(anr.detected, DetectionType.ANR, AlertLevel.LOW);

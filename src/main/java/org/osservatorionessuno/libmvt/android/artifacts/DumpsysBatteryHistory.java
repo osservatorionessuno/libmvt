@@ -11,7 +11,6 @@ public class DumpsysBatteryHistory extends DumpsysArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
-        results.clear();
         boolean[] done = { false };
 
         extractDumpsysSection(artifactInput.inputStream, "batterystats:", line -> {
@@ -78,7 +77,7 @@ public class DumpsysBatteryHistory extends DumpsysArtifact {
             map.put("uid", uid);
             map.put("package_name", packageName);
             map.put("service", service);
-            results.add(map);
+            emit(map);
         });
     }
 
@@ -96,12 +95,10 @@ public class DumpsysBatteryHistory extends DumpsysArtifact {
     }
 
     @Override
-    public void checkIndicators() {
+    protected void checkRecord(Object record) {
         if (indicators == null) return;
-        for (Object obj : results) {
-            @SuppressWarnings("unchecked")
-            Map<String, String> rec = (Map<String, String>) obj;
-            detected.addAll(indicators.matchString(rec.get("package_name"), IndicatorType.APP_ID));
-        }
+        @SuppressWarnings("unchecked")
+        Map<String, String> event = (Map<String, String>) record;
+        detected.addAll(indicators.matchString(event.get("package_name"), IndicatorType.APP_ID));
     }
 }

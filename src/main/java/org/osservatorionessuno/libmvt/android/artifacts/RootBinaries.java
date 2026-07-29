@@ -24,7 +24,6 @@ public class RootBinaries extends AndroidArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException, JSONException {
-        results.clear();
         try {
             parseByExtension(artifactInput, this::parseProtobuf, this::parseJson);
         } catch (JSONException | IOException e) {
@@ -36,7 +35,7 @@ public class RootBinaries extends AndroidArtifact {
 
     private void parseProtobuf(InputStream input) throws IOException {
         ProtobufRecords.forEachDelimited(input, record ->
-                results.add(ProtobufRecords.readStringRecord(record)));
+                emit(ProtobufRecords.readStringRecord(record)));
     }
 
     private void parseJson(InputStream input) throws IOException, JSONException {
@@ -46,28 +45,25 @@ public class RootBinaries extends AndroidArtifact {
         }
         JSONArray entries = new JSONArray(content);
         for (int idx = 0; idx < entries.length(); idx++) {
-            results.add(entries.getString(idx));
+            emit(entries.getString(idx));
         }
     }
 
     @Override
-    public void checkIndicators() {
-        for (Object obj : results) {
-            @SuppressWarnings("unchecked")
-            String path = (String) obj;
-            if (path == null || path.trim().isEmpty()) continue;
+    protected void checkRecord(Object record) {
+        String path = (String) record;
+        if (path == null || path.trim().isEmpty()) return;
 
-            // Extract binary name from path
-            String[] parts = path.replace("\\", "/").split("/");
-            String binaryName = parts[parts.length - 1].toLowerCase();
+        // Extract binary name from path
+        String[] parts = path.replace("\\", "/").split("/");
+        String binaryName = parts[parts.length - 1].toLowerCase();
 
-            // If a description is found, than the binary is known, otherwise it is unknown.
-            String description = Utils.ROOT_BINARIES.get(binaryName);
-            if (description == null) {
-                description = "unknown root file";
-            }
-
-            detected.add(new Detection(DetectionType.ROOT_BINARIES, path, description));
+        // If a description is found, than the binary is known, otherwise it is unknown.
+        String description = Utils.ROOT_BINARIES.get(binaryName);
+        if (description == null) {
+            description = "unknown root file";
         }
+
+        detected.add(new Detection(DetectionType.ROOT_BINARIES, path, description));
     }
 }

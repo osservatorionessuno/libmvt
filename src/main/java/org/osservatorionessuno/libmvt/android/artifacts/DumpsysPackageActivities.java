@@ -11,7 +11,6 @@ public class DumpsysPackageActivities extends DumpsysArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
-        results.clear();
         boolean[] inActivityResolver = { false };
         boolean[] inNonDataActions = { false };
         boolean[] done = { false };
@@ -50,17 +49,15 @@ public class DumpsysPackageActivities extends DumpsysArtifact {
             record.put("intent", intent[0]);
             record.put("package_name", packageName);
             record.put("activity", activity);
-            results.add(record);
+            emit(record);
         });
     }
 
     @Override
-    public void checkIndicators() {
+    protected void checkRecord(Object record) {
         if (indicators == null) return;
-        for (Object obj : results) {
-            @SuppressWarnings("unchecked")
-            Map<String, String> rec = (Map<String, String>) obj;
-            detected.addAll(indicators.matchString(rec.get("package_name"), IndicatorType.APP_ID));
-        }
+        @SuppressWarnings("unchecked")
+        Map<String, String> activity = (Map<String, String>) record;
+        detected.addAll(indicators.matchString(activity.get("package_name"), IndicatorType.APP_ID));
     }
 }

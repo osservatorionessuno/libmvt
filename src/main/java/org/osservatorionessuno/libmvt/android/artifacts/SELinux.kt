@@ -11,20 +11,15 @@ class SELinux : AndroidArtifact() {
     }
 
     override fun parse(artifactInput: AbstractInput) {
-        results.clear()
         val status = collectText(artifactInput.inputStream).trim().lowercase()
-        val map = mutableMapOf<String, String>()
-        map["status"] = status
-        results.add(map)
+        emit(mapOf("status" to status))
     }
 
-    override fun checkIndicators() {
-        if (results.isEmpty()) return
+    override fun checkRecord(record: Any) {
         @Suppress("UNCHECKED_CAST")
-        val statusMap = results[0] as? Map<String, String> ?: return
-        val entry = statusMap["status"] ?: ""
-        if (entry != "enforcing") {
-            detected.add(Detection(DetectionType.SELINUX_STATUS, entry))
+        val status = (record as? Map<String, String>)?.get("status") ?: ""
+        if (status != "enforcing") {
+            detected.add(Detection(DetectionType.SELINUX_STATUS, status))
         }
     }
 }

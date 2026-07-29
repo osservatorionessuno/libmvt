@@ -10,13 +10,8 @@ class APK : AndroidArtifact() {
     }
 
     override fun parse(artifactInput: AbstractInput) {
-        results.clear()
-        val apkInfo = APKParser.parseAPK(artifactInput.inputStream)
-        results.add(apkInfo)
+        emit(APKParser.parseAPK(artifactInput.inputStream))
     }
 
-    override fun checkIndicators() {
-        if (results.isEmpty()) return
-        // TODO: Check indicators
-    }
+    // TODO: override checkRecord to check indicators
 }

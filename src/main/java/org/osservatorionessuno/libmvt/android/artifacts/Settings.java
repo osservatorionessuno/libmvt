@@ -44,7 +44,6 @@ public class Settings extends AndroidArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
-        results.clear();
         Map<String, String> map = new HashMap<>();
         forEachLine(artifactInput.inputStream, line -> {
             line = line.trim();
@@ -52,15 +51,15 @@ public class Settings extends AndroidArtifact {
             String[] parts = line.split("=", 2);
             map.put(parts[0], parts.length > 1 ? parts[1] : "");
         });
-        
-        results.add(map);
+
+        // One record per settings file: a value is only dangerous relative to its key.
+        emit(map);
     }
 
     @Override
-    public void checkIndicators() {
-        if (results.isEmpty()) return;
+    protected void checkRecord(Object record) {
         @SuppressWarnings("unchecked")
-        Map<String, String> settings = (Map<String, String>) results.get(0);
+        Map<String, String> settings = (Map<String, String>) record;
         for (Map.Entry<String, String> entry : settings.entrySet()) {
             DangerousSetting ds = DANGEROUS_SETTINGS.get(entry.getKey());
             if (ds != null &&

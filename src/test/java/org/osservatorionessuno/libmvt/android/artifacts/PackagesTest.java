@@ -5,7 +5,6 @@ import org.osservatorionessuno.libmvt.ResourcesUtils;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Indicators;
-import org.osservatorionessuno.libmvt.common.JvmMapStringResolver;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -13,44 +12,30 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValue;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.indicatorsFromJson;
-import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.parseArtifact;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.streamArtifact;
 
 public class PackagesTest {
 
-    /**
-     * Packages streams: every record is checked and then dropped, so getResults() stays empty.
-     * Decoded records are observed through recordObserver instead, and indicators have to be
-     * set before parse because there is nothing left to re-check afterwards.
-     */
-    private static Packages parse(String path, List<Object> sink, Consumer<Packages> configure)
+    private static Packages parse(String path, Indicators indicators, List<Object> sink)
             throws Exception {
         try (InputStream data = ResourcesUtils.readResource("androidqf/" + path)) {
-            return parseArtifact(Packages::new, path, data, packages -> {
-                packages.setStringResolver(new JvmMapStringResolver());
-                packages.setRecordObserver(sink::add);
-                configure.accept(packages);
-            });
+            return streamArtifact(Packages::new, path, data, indicators, sink);
         }
-    }
-
-    private static Packages parse(String path, Consumer<Packages> configure) throws Exception {
-        return parse(path, new ArrayList<>(), configure);
     }
 
     private static List<Object> records(String path) throws Exception {
         List<Object> sink = new ArrayList<>();
-        parse(path, sink, p -> { });
+        parse(path, null, sink);
         return sink;
     }
 
     private static Packages withIndicators(String path, Indicators indicators) throws Exception {
-        return parse(path, p -> p.setIndicators(indicators));
+        return parse(path, indicators, null);
     }
 
     @Test
@@ -65,16 +50,16 @@ public class PackagesTest {
     @Test
     public void testPackagesList() throws Exception {
         List<Object> sink = new ArrayList<>();
-        Packages p = parse("packages.json", sink, ignored -> { });
+        Packages p = parse("packages.json", null, sink);
         assertEquals(7, sink.size());
-        assertTrue(p.getResults().isEmpty());
+        assertEquals(7, p.getRecordCount());
     }
 
     @Test
     public void testNonAppstoreWarnings() throws Exception {
         // Matches the AndroidQF fixture: whatsapp (null installer), revanced + fdroid (browser
         // installer), apollo (third party store installer). Needs no indicators.
-        Packages p = parse("packages.json", ignored -> { });
+        Packages p = parse("packages.json", null, null);
 
         assertEquals(5, p.detected.size());
 
@@ -171,14 +156,11 @@ public class PackagesTest {
                 "{ \"indicators\": [ { \"app:cert.sha256\": [ \""
                         + certA + "\", \"" + certB + "\" ] } ] }");
 
-        Packages p = parseArtifact(
+        Packages p = streamArtifact(
                 Packages::new,
                 "packages.pb",
                 new ByteArrayInputStream(multiSignerPackagesPb(certA, certB)),
-                packages -> {
-                    packages.setStringResolver(new JvmMapStringResolver());
-                    packages.setIndicators(indicators);
-                });
+                indicators);
 
         assertDetectionValue(
                 p.detected,

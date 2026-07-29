@@ -23,7 +23,6 @@ public class Processes extends AndroidArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
-        results.clear();
         forEachLine(artifactInput.inputStream, line -> {
             if (line.startsWith("USER")) return; // Skip header line
             line = line.trim();
@@ -61,22 +60,20 @@ public class Processes extends AndroidArtifact {
             rec.put("stat", parts[7]);
             rec.put("proc_name", parts[8].replace("[", "").replace("]", ""));
             rec.put("label", label);
-            results.add(rec);
+            emit(rec);
         });
     }
 
     @Override
-    public void checkIndicators() {
+    protected void checkRecord(Object record) {
         if (indicators == null) return;
-        for (Object obj : results) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> map = (Map<String, Object>) obj;
-            String name = (String) map.get("proc_name");
-            // We skip this process because of false positives.
-            if ("gatekeeperd".equals(name)) continue;
-            
-            detected.addAll(indicators.matchString(name, IndicatorType.APP_ID));
-            detected.addAll(indicators.matchString(name, IndicatorType.PROCESS));
-        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> process = (Map<String, Object>) record;
+        String name = (String) process.get("proc_name");
+        // We skip this process because of false positives.
+        if ("gatekeeperd".equals(name)) return;
+
+        detected.addAll(indicators.matchString(name, IndicatorType.APP_ID));
+        detected.addAll(indicators.matchString(name, IndicatorType.PROCESS));
     }
 }

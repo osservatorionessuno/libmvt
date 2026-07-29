@@ -11,17 +11,14 @@ public class DumpsysBatteryDaily extends DumpsysArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
-        results.clear();
         Map<String, String>[] daily = new Map[] { null };
         boolean[] inPackageChanges = { false };
+        // Dedup buffer, reset at every daily window rather than spanning the whole log.
         List<Map<String, String>> updates = new ArrayList<>();
 
         extractDumpsysSection(artifactInput.inputStream, "batterystats:", line -> {
             if (line.startsWith("  Daily from ")) {
-                if (!updates.isEmpty()) {
-                    results.addAll(updates);
-                    updates.clear();
-                }
+                flushUpdates(updates);
                 String tf = line.substring(13).trim();
                 String[] parts = tf.replace(":", "").split(" to ", 2);
                 if (parts.length < 2) {
@@ -66,16 +63,19 @@ public class DumpsysBatteryDaily extends DumpsysArtifact {
                 updates.add(rec);
             }
         });
-        if (!updates.isEmpty()) results.addAll(updates);
+        flushUpdates(updates);
+    }
+
+    private void flushUpdates(List<Map<String, String>> updates) {
+        for (Map<String, String> update : updates) emit(update);
+        updates.clear();
     }
 
     @Override
-    public void checkIndicators() {
+    protected void checkRecord(Object record) {
         if (indicators == null) return;
-        for (Object obj : results) {
-            @SuppressWarnings("unchecked")
-            Map<String, String> rec = (Map<String, String>) obj;
-            detected.addAll(indicators.matchString(rec.get("package_name"), IndicatorType.APP_ID));
-        }
+        @SuppressWarnings("unchecked")
+        Map<String, String> update = (Map<String, String>) record;
+        detected.addAll(indicators.matchString(update.get("package_name"), IndicatorType.APP_ID));
     }
 }

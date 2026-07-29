@@ -2,39 +2,38 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
-import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Indicators;
-import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionCount;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.streamArtifact;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.streamRecords;
 
 public class DumpsysAccessibilityTest {
 
     @Test
     public void testParsing() throws Exception {
-        DumpsysAccessibility da = new DumpsysAccessibility();
-        InputStream data = ResourcesUtils.readResource("android_data/dumpsys_accessibility.txt");
-        da.parse(new AbstractInput("dumpsys.txt", data) {});
-        assertEquals(4, da.getResults().size());
+        List<Object> parsed = streamRecords(
+                DumpsysAccessibility::new,
+                "dumpsys.txt",
+                ResourcesUtils.readResource("android_data/dumpsys_accessibility.txt"));
+        assertEquals(4, parsed.size());
+
         @SuppressWarnings("unchecked")
-        Map<String, String> first = (Map<String, String>) da.getResults().get(0);
+        Map<String, String> first = (Map<String, String>) parsed.get(0);
         assertEquals("com.android.settings", first.get("package_name"));
         assertEquals(
                 "com.android.settings/com.samsung.android.settings.development.gpuwatch.GPUWatchInterceptor",
@@ -44,22 +43,20 @@ public class DumpsysAccessibilityTest {
 
     @Test
     public void testParsingV14Format() throws Exception {
-        DumpsysAccessibility da = new DumpsysAccessibility();
-        InputStream data = ResourcesUtils.readResource("android_data/dumpsys_accessibility_v14_or_later.txt");
-        da.parse(new AbstractInput("dumpsys.txt", data) {});
-        assertEquals(1, da.getResults().size());
+        List<Object> parsed = streamRecords(
+                DumpsysAccessibility::new,
+                "dumpsys.txt",
+                ResourcesUtils.readResource("android_data/dumpsys_accessibility_v14_or_later.txt"));
+        assertEquals(1, parsed.size());
+
         @SuppressWarnings("unchecked")
-        Map<String, String> first = (Map<String, String>) da.getResults().get(0);
+        Map<String, String> first = (Map<String, String>) parsed.get(0);
         assertEquals("com.malware.accessibility", first.get("package_name"));
         assertEquals("com.malware.service.malwareservice", first.get("service"));
     }
 
     @Test
     public void testIocCheck() throws Exception {
-        DumpsysAccessibility da = new DumpsysAccessibility();
-        InputStream data = ResourcesUtils.readResource("android_data/dumpsys_accessibility.txt");
-        da.parse(new AbstractInput("dumpsys.txt", data) {});
-
         File tempDir = new File(System.getProperty("java.io.tmpdir"),
                 "libmvt-test-iocs-" + System.currentTimeMillis());
         if (!tempDir.mkdirs() && !tempDir.isDirectory()) {
@@ -93,8 +90,12 @@ public class DumpsysAccessibilityTest {
 
         Indicators indicators = new Indicators();
         indicators.loadFromDirectory(tempDir);
-        da.setIndicators(indicators);
-        da.checkIndicators();
+
+        DumpsysAccessibility da = streamArtifact(
+                DumpsysAccessibility::new,
+                "dumpsys.txt",
+                ResourcesUtils.readResource("android_data/dumpsys_accessibility.txt"),
+                indicators);
 
         assertDetectionCount(da.detected, DetectionType.IOC_MATCH, 1);
         assertDetectionValueContains(da.detected, DetectionType.IOC_MATCH, "com.sec.android.app.camera");

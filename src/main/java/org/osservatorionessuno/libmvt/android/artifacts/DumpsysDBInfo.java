@@ -15,7 +15,6 @@ public class DumpsysDBInfo extends DumpsysArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
-        results.clear();
         String[] pool = { null };
         boolean[] inOperations = { false };
 
@@ -42,7 +41,7 @@ public class DumpsysDBInfo extends DumpsysArtifact {
                 map.put("action", m.group(3));
                 map.put("sql", m.group(4));
                 map.put("path", pool[0]);
-                results.add(map);
+                emit(map);
             } else {
                 Matcher m2 = RXP_NO_PID.matcher(line);
                 if (!m2.find()) return;
@@ -51,21 +50,18 @@ public class DumpsysDBInfo extends DumpsysArtifact {
                 map.put("action", m2.group(2));
                 map.put("sql", m2.group(3));
                 map.put("path", pool[0]);
-                results.add(map);
+                emit(map);
             }
         });
     }
 
     @Override
-    public void checkIndicators() {
+    protected void checkRecord(Object record) {
         if (indicators == null) return;
-        for (Object obj : results) {
-            @SuppressWarnings("unchecked")
-            Map<String, String> map = (Map<String, String>) obj;
-            String path = map.getOrDefault("path", "");
-            for (String part : path.split("/")) {
-                detected.addAll(indicators.matchString(part, IndicatorType.APP_ID));
-            }
+        @SuppressWarnings("unchecked")
+        Map<String, String> operation = (Map<String, String>) record;
+        for (String part : operation.getOrDefault("path", "").split("/")) {
+            detected.addAll(indicators.matchString(part, IndicatorType.APP_ID));
         }
     }
 }

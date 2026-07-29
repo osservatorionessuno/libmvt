@@ -32,7 +32,6 @@ public class DumpsysAdb extends DumpsysArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws Exception {
-        results.clear();
         Map<String, Object> res = new HashMap<>();
         boolean[] inXml = {false};
         StringBuilder[] xmlBuilder = {null};
@@ -78,12 +77,8 @@ public class DumpsysAdb extends DumpsysArtifact {
         });
 
         if (error[0] != null) throw error[0];
-        results.add(res);
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> cast(Object o) {
-        return (Map<String, Object>) o;
+        // The whole section collapses into a single record: one keystore per device.
+        emit(res);
     }
 
     private List<Map<String, String>> parseXml(String xml) throws Exception {
@@ -144,25 +139,21 @@ public class DumpsysAdb extends DumpsysArtifact {
     }
 
     @Override
-    public void checkIndicators() {
-        if (results.isEmpty()) return;
+    protected void checkRecord(Object record) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> adb = (Map<String, Object>) record;
+        @SuppressWarnings("unchecked")
+        List<Map<String, String>> userKeys = (List<Map<String, String>>) adb.get("user_keys");
+        if (userKeys == null) return;
 
-        for (Object obj : results) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> map = (Map<String, Object>) obj;
-            @SuppressWarnings("unchecked")
-            List<Map<String, String>> userKeys = (List<Map<String, String>>) map.get("user_keys");
-            if (userKeys != null) {
-                for (Map<String, String> userKey : userKeys) {
-                    String fingerprint = userKey.get("fingerprint");
-                    DetectionType type = hostFingerprints.contains(fingerprint)
-                        ? DetectionType.ADB_HOST_FINGERPRINT
-                        : DetectionType.ADB_FINGERPRINT;
-                    detected.add(new Detection(type,
-                        fingerprint,
-                        userKey.get("user").isEmpty() ? "unknown user" : userKey.get("user")));
-                }
-            }
+        for (Map<String, String> userKey : userKeys) {
+            String fingerprint = userKey.get("fingerprint");
+            DetectionType type = hostFingerprints.contains(fingerprint)
+                ? DetectionType.ADB_HOST_FINGERPRINT
+                : DetectionType.ADB_FINGERPRINT;
+            detected.add(new Detection(type,
+                fingerprint,
+                userKey.get("user").isEmpty() ? "unknown user" : userKey.get("user")));
         }
     }
 }

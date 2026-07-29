@@ -2,26 +2,27 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
-import org.osservatorionessuno.libmvt.common.AbstractInput;
 
-import java.io.InputStream;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.runIocCheck;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.loadTestIndicators;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.streamArtifact;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.streamRecords;
 
 public class DumpsysDBInfoTest {
 
     @Test
     public void testParsing() throws Exception {
-        DumpsysDBInfo dbi = new DumpsysDBInfo();
-        InputStream data = ResourcesUtils.readResource("android_data/dumpsys_dbinfo.txt");
-        dbi.parse(new AbstractInput("dumpsys.txt", data) {});
-
-        assertEquals(5, dbi.getResults().size());
+        List<Object> parsed = streamRecords(
+                DumpsysDBInfo::new,
+                "dumpsys.txt",
+                ResourcesUtils.readResource("android_data/dumpsys_dbinfo.txt"));
+        assertEquals(5, parsed.size());
 
         @SuppressWarnings("unchecked")
-        Map<String, String> first = (Map<String, String>) dbi.getResults().get(0);
+        Map<String, String> first = (Map<String, String>) parsed.get(0);
         assertEquals("executeForCursorWindow", first.get("action"));
         assertEquals("PRAGMA database_list;", first.get("sql"));
         assertEquals("/data/user/0/com.wssyncmldm/databases/idmsdk.db", first.get("path"));
@@ -29,11 +30,11 @@ public class DumpsysDBInfoTest {
 
     @Test
     public void testIocCheck() throws Exception {
-        DumpsysDBInfo dbi = new DumpsysDBInfo();
-        InputStream data = ResourcesUtils.readResource("android_data/dumpsys_dbinfo.txt");
-        dbi.parse(new AbstractInput("dumpsys.txt", data) {});
-
-        runIocCheck(dbi);
+        DumpsysDBInfo dbi = streamArtifact(
+                DumpsysDBInfo::new,
+                "dumpsys.txt",
+                ResourcesUtils.readResource("android_data/dumpsys_dbinfo.txt"),
+                loadTestIndicators());
 
         assertEquals(0, dbi.detected.size());
     }

@@ -5,42 +5,44 @@ import org.osservatorionessuno.libmvt.ResourcesUtils;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.DetectionType;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetection;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
-import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.parseAndroidArtifact;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.streamArtifact;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.streamRecords;
 
 public class RootBinariesTest {
 
     @Test
     public void testParsingJson() throws Exception {
-        RootBinaries rb = parseAndroidArtifact(
+        List<Object> parsed = streamRecords(
                 RootBinaries::new,
                 "root_binaries.json",
                 ResourcesUtils.readResource("androidqf/root_binaries.json"));
-        assertEquals(2, rb.getResults().size());
-        assertEquals("/system/xbin/su", rb.getResults().get(0));
-        assertEquals("/data/local/tmp/unknown_root_file", rb.getResults().get(1));
+        assertEquals(2, parsed.size());
+        assertEquals("/system/xbin/su", parsed.get(0));
+        assertEquals("/data/local/tmp/unknown_root_file", parsed.get(1));
     }
 
     @Test
     public void testParsingProtobuf() throws Exception {
-        RootBinaries rb = parseAndroidArtifact(
+        List<Object> parsed = streamRecords(
                 RootBinaries::new,
                 "root_binaries.pb",
                 ResourcesUtils.readResource("androidqf/root_binaries.pb"));
-        assertEquals(2, rb.getResults().size());
-        assertEquals("/system/xbin/su", rb.getResults().get(0));
-        assertEquals("/data/local/tmp/unknown_root_file", rb.getResults().get(1));
+        assertEquals(2, parsed.size());
+        assertEquals("/system/xbin/su", parsed.get(0));
+        assertEquals("/data/local/tmp/unknown_root_file", parsed.get(1));
     }
 
     @Test
     public void testKnownAndUnknownBinaries() throws Exception {
-        RootBinaries rb = parseAndroidArtifact(
+        RootBinaries rb = streamArtifact(
                 RootBinaries::new,
                 "root_binaries.json",
                 ResourcesUtils.readResource("androidqf/root_binaries.json"));
-        rb.checkIndicators();
 
         assertEquals(2, rb.detected.size());
         assertDetection(rb.detected, DetectionType.ROOT_BINARIES, AlertLevel.HIGH);

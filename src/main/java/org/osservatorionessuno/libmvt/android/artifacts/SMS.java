@@ -29,9 +29,4 @@ public class SMS extends AndroidArtifact {
     public void parse(AbstractInput artifactInput) throws IOException {
         return;
     }
-
-    @Override
-    public void checkIndicators() {
-        return;
-    }
 }
