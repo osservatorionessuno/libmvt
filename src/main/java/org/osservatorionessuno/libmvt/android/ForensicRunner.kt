@@ -108,6 +108,7 @@ class ForensicRunner(private val stringResolver: StringResolver) {
      *
      * A first pass lists the entries a module asks for, then each is reopened on demand: a
      * bugreport is as large as the device wants it to be, so nothing here is held in memory.
+     * A zip that cannot be listed to the end keeps the entries it did yield and reports the rest.
      */
     @Throws(Exception::class)
     private fun analyzeNestedZip(
@@ -115,15 +116,25 @@ class ForensicRunner(private val stringResolver: StringResolver) {
         openZip: () -> InputStream,
     ): Map<String, Artifact> {
         val wanted = LinkedHashSet<String>()
-        ZipInputStream(openZip()).use { zis ->
-            while (true) {
-                val entry = zis.nextEntry ?: break
-                val nestedName = entry.name.replace('\\', '/')
-                if (!entry.isDirectory && findModuleIndices(nestedName).isNotEmpty()) {
-                    wanted.add(nestedName)
+        var listingFailed = false
+        try {
+            ZipInputStream(openZip()).use { zis ->
+                while (true) {
+                    val entry = zis.nextEntry ?: break
+                    val nestedName = entry.name.replace('\\', '/')
+                    if (!entry.isDirectory && findModuleIndices(nestedName).isNotEmpty()) {
+                        wanted.add(nestedName)
+                    }
+                    zis.closeEntry()
                 }
-                zis.closeEntry()
             }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (Thread.currentThread().isInterrupted) throw e
+            // A truncated bugreport costs the entries after the damage, not the acquisition.
+            LogUtils.w(TAG, "Cannot list $pathPrefix: $e")
+            listingFailed = true
         }
         LogUtils.d(TAG, "analyzeNestedZip: prefix=$pathPrefix entries=$wanted")
 
@@ -132,6 +143,14 @@ class ForensicRunner(private val stringResolver: StringResolver) {
             analyzePath(nestedName) { openNestedEntry(openZip, nestedName) }?.let { artifact ->
                 results["$pathPrefix/$nestedName"] = artifact
             }
+        }
+        if (listingFailed) {
+            // Report the lost coverage, as analyzePath does for a module that throws.
+            val carrier = SkippedArtifact()
+            carrier.detected.add(
+                Detection(DetectionType.ARTIFACT_PARSE_FAILED, pathPrefix, "nested zip"),
+            )
+            results[pathPrefix] = carrier
         }
         return results
     }

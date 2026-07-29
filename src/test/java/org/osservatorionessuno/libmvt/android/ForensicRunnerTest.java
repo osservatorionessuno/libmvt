@@ -282,6 +282,38 @@ public class ForensicRunnerTest {
         assertEquals(expectedOpens, opens.get());
     }
 
+    @Test
+    public void testTruncatedNestedBugreportDoesNotAbortScan() throws Exception {
+        byte[] bugreportBytes = zipBugreportFixture();
+        // Cut mid-entry: the listing pass dies partway through the nested zip.
+        byte[] truncated = new byte[bugreportBytes.length / 2];
+        System.arraycopy(bugreportBytes, 0, truncated, 0, truncated.length);
+
+        File outerZip = File.createTempFile("androidqf-truncated-bugreport", ".zip");
+        outerZip.deleteOnExit();
+        try (ZipOutputStream zipOut = new ZipOutputStream(new FileOutputStream(outerZip))) {
+            zipOut.putNextEntry(new ZipEntry("getprop.txt"));
+            zipOut.write(readResourceBytes("androidqf/getprop.txt"));
+            zipOut.closeEntry();
+            zipOut.putNextEntry(new ZipEntry("bugreport.zip"));
+            zipOut.write(truncated);
+            zipOut.closeEntry();
+        }
+
+        ForensicRunner runner = new ForensicRunner(new JvmMapStringResolver());
+        Map<String, Artifact> res = runner.streamAnalysisFromZip(outerZip);
+
+        // The rest of the acquisition still parses...
+        assertTrue(res.containsKey("getprop.txt"));
+        assertTrue(res.get("getprop.txt").getResults().size() > 0);
+
+        // ...and the unread part of the bugreport reads as "not analysed", not as "clean".
+        Artifact skipped = res.get("bugreport.zip");
+        assertNotNull(skipped);
+        assertDetectionValueContains(
+                skipped.detected, DetectionType.ARTIFACT_PARSE_FAILED, "bugreport.zip");
+    }
+
     private static byte[] zipBugreportFixture() throws IOException {
         Path root = Paths.get("src", "test", "resources", "android_data", "bugreport");
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
