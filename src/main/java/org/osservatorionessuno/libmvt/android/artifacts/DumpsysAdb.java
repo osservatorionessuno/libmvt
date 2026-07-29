@@ -4,8 +4,10 @@ import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.Detection;
 import org.osservatorionessuno.libmvt.common.DetectionType;
 
+import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.*;
 import java.io.InputStream;
@@ -82,8 +84,16 @@ public class DumpsysAdb extends DumpsysArtifact {
     }
 
     private List<Map<String, String>> parseXml(String xml) throws Exception {
-        var doc = DocumentBuilderFactory.newInstance().newDocumentBuilder()
-                .parse(new ByteArrayInputStream(xml.getBytes()));
+        // This XML is the keystore blob straight from the device, so it is untrusted: a DOCTYPE
+        // would otherwise let it read the analyst's files or reach the network. A real keystore
+        // has none, so rejecting them outright costs nothing.
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        factory.setExpandEntityReferences(false);
+
+        var doc = factory.newDocumentBuilder()
+                .parse(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
         List<Map<String, String>> list = new ArrayList<>();
         var nodes = doc.getElementsByTagName("adbKey");
         for (int i = 0; i < nodes.getLength(); i++) {
