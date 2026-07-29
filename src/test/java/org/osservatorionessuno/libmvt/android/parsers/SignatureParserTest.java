@@ -2,6 +2,7 @@ package org.osservatorionessuno.libmvt.android.parsers;
 
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
+import org.osservatorionessuno.libmvt.common.Utils;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -52,6 +53,33 @@ public class SignatureParserTest {
                 fileCerts.get(0).getChecksums().getSha1(),
                 byteCerts.get(0).getChecksums().getSha1());
         assertEquals(fileCerts.get(0).getTrusted(), byteCerts.get(0).getTrusted());
+    }
+
+    @Test
+    public void testRepackagedApkIsNotTrustedEvenWhenAllowlisted() throws Exception {
+        File apk = ResourcesUtils.readResourceFile("apks/signed_test.apk");
+        byte[] repackaged = ApkTamperUtils.repackageWithTamperedEntry(apk, "resources.arsc");
+
+        SignatureParser.APKSignatureInfo info =
+                new SignatureParser().parseAPKSignature(repackaged);
+
+        // The certificate survives repackaging, so it is still reported...
+        assertFalse(info.getVerified());
+        assertFalse(info.getSignerCertificates().isEmpty());
+        String sha1 = info.getSignerCertificates().get(0).getChecksums().getSha1();
+
+        // ...but an allowlisted fingerprint must not confer trust without a verified signature:
+        // anyone can copy a vendor certificate into an APK they repackaged.
+        Utils.VALID_CERTIFICATES.add(sha1);
+        try {
+            SignatureParser.APKSignatureInfo allowlisted =
+                    new SignatureParser().parseAPKSignature(repackaged);
+            assertFalse(allowlisted.getVerified());
+            assertTrue(allowlisted.getSignerCertificates().stream().noneMatch(
+                    CertificateParser.CertificateInfo::getTrusted));
+        } finally {
+            Utils.VALID_CERTIFICATES.remove(sha1);
+        }
     }
 
     @Test

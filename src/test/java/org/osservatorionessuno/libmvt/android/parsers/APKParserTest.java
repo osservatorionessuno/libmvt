@@ -95,9 +95,39 @@ public class APKParserTest {
         Utils.VALID_CERTIFICATES.add(sha1);
         try {
             APKParser.APKInfo trusted = APKParser.parseAPK(apk);
+            assertTrue(trusted.getVerified());
             assertTrue(trusted.getCertificates().get(0).getTrusted());
             // Trusted signer → no static analysis; suspicious stays false.
             assertFalse(trusted.getSuspicious());
+        } finally {
+            Utils.VALID_CERTIFICATES.remove(sha1);
+        }
+    }
+
+    @Test
+    public void testRepackagedApkDoesNotSkipStaticAnalysis() throws Exception {
+        File apk = ResourcesUtils.readResourceFile("apks/signed_test.apk");
+        File repackaged = ApkTamperUtils.repackageWithTamperedEntryToFile(apk, "resources.arsc");
+
+        String sha1 = APKParser.parseAPK(apk).getCertificates().get(0).getChecksums().getSha1();
+
+        // Allowlist the signer, as if the repackaged app carried a vendor certificate.
+        Utils.VALID_CERTIFICATES.add(sha1);
+        try {
+            APKParser.APKInfo info = APKParser.parseAPK(repackaged);
+
+            // Signature broken, so no certificate is trusted and the static analysis gate stays
+            // open. The fixture manifest is benign, so suspicious itself cannot witness that.
+            assertFalse(info.getVerified());
+            assertFalse(info.getCertificates().isEmpty());
+            assertTrue(info.getCertificates().stream().noneMatch(
+                    CertificateParser.CertificateInfo::getTrusted));
+
+            APKParser.APKInfo fromStream =
+                    APKParser.parseAPK(Files.newInputStream(repackaged.toPath()));
+            assertFalse(fromStream.getVerified());
+            assertTrue(fromStream.getCertificates().stream().noneMatch(
+                    CertificateParser.CertificateInfo::getTrusted));
         } finally {
             Utils.VALID_CERTIFICATES.remove(sha1);
         }

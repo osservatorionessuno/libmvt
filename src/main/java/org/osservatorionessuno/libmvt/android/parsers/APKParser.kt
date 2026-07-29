@@ -15,6 +15,8 @@ object APKParser {
         val versionName: String,
         val files: List<String>,
         val certificates: List<CertificateParser.CertificateInfo>,
+        /** Whether the APK signature verified. False means [certificates] are unauthenticated. */
+        val verified: Boolean,
         val suspicious: Boolean,
     )
 
@@ -51,7 +53,16 @@ object APKParser {
     private fun parseAPKBytes(apkBytes: ByteArray): APKInfo {
         // Get the signature information from the APK
         val signatureInfo = SignatureParser().parseAPKSignature(apkBytes)
-        val trustedCertificates = signatureInfo.signerCertificates.filter { it.trusted }
+        // A repackaged APK keeps the original signer certificate but breaks its signature, so
+        // skipping analysis on the fingerprint alone would hide exactly the tampering we look for.
+        val trustedCertificates =
+            if (signatureInfo.verified) {
+                signatureInfo.signerCertificates.filter { it.trusted }
+            } else {
+                // Debug, not warn: i/w land on stdout and would corrupt the CLI's JSON output.
+                LogUtils.d("APKParser", "APK signature did not verify, no certificate is trusted")
+                emptyList()
+            }
 
         // Get the manifest information from the APK
         val files = mutableListOf<String>()
@@ -92,6 +103,7 @@ object APKParser {
             versionName = manifestInfo.versionName,
             files = files,
             certificates = signatureInfo.signerCertificates,
+            verified = signatureInfo.verified,
             suspicious = suspicious,
         )
     }

@@ -49,14 +49,19 @@ class SignatureParser {
                 throw SignatureParsingException("Failed to verify APK: ${e.message}", e)
             }
 
+        // apksig fills signerCertificates only once an APK verifies, so a certificate found by
+        // walking the per-scheme signers below usually comes from an APK that failed to verify.
+        // Those certificates are still reported, but they cannot be trusted: pass the verdict
+        // down so the allowlist is only consulted for a signature that actually checked out.
+        val verified = result.isVerified
+
         val certs =
             if (result.signerCertificates.isNotEmpty()) {
-                result.signerCertificates.map { CertificateParser.fromX509Certificate(it) }
+                result.signerCertificates.map { CertificateParser.fromX509Certificate(it, verified) }
             } else {
-                // apksig has a bug where it can verify an APK but leave signerCertificates empty.
                 val collected = mutableListOf<CertificateParser.CertificateInfo>()
                 fun addFromCert(cert: X509Certificate?) {
-                    cert?.let { collected.add(CertificateParser.fromX509Certificate(it)) }
+                    cert?.let { collected.add(CertificateParser.fromX509Certificate(it, verified)) }
                 }
                 result.v4SchemeSigners.forEach { addFromCert(it.certificate) }
                 result.v31SchemeSigners.forEach { addFromCert(it.certificate) }
@@ -74,7 +79,7 @@ class SignatureParser {
             }
 
         return APKSignatureInfo(
-            verified = result.isVerified,
+            verified = verified,
             signerCertificates = certs,
             verifiedUsingV1Scheme = result.isVerifiedUsingV1Scheme,
             verifiedUsingV2Scheme = result.isVerifiedUsingV2Scheme,
