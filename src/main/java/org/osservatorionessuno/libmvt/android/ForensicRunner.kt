@@ -9,7 +9,6 @@ import org.osservatorionessuno.libmvt.common.Indicators
 import org.osservatorionessuno.libmvt.common.ReopenableInput
 import org.osservatorionessuno.libmvt.common.StringResolver
 import org.osservatorionessuno.libmvt.common.logging.LogUtils
-import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -47,7 +46,7 @@ private class SkippedArtifact : AndroidArtifact() {
  * - A fresh module instance is created per parse; results are then merged.
  * - A module that throws is dropped and logged; the rest of the acquisition still runs.
  * - [SKIP_FILES] and paths under `tmp/` are ignored.
- * - Nested [BUGREPORT_ZIP] entries are buffered in memory and analyzed like a zip archive.
+ * - Nested [BUGREPORT_ZIP] entries are expanded and analyzed like a zip archive.
  */
 class ForensicRunner(private val stringResolver: StringResolver) {
     private var indicators: Indicators? = null
@@ -104,45 +103,60 @@ class ForensicRunner(private val stringResolver: StringResolver) {
         analyzeEntry(entry.path) { entry.openStream() }
 
     /**
-     * Expand an in-memory zip (e.g. nested bugreport) and analyze matching entries.
+     * Expand a nested zip (e.g. bugreport) and analyze matching entries.
      * Result keys are `"$pathPrefix/${entry.name}"`.
+     *
+     * A first pass lists the entries a module asks for, then each is reopened on demand: a
+     * bugreport is as large as the device wants it to be, so nothing here is held in memory.
      */
     @Throws(Exception::class)
-    private fun streamAnalysisFromZipBytes(
-        bytes: ByteArray,
+    private fun analyzeNestedZip(
         pathPrefix: String,
+        openZip: () -> InputStream,
     ): Map<String, Artifact> {
-        LogUtils.d(TAG, "streamAnalysisFromZipBytes: prefix=$pathPrefix size=${bytes.size}")
-        val results = LinkedHashMap<String, Artifact>()
-        ZipInputStream(ByteArrayInputStream(bytes)).use { zis ->
+        val wanted = LinkedHashSet<String>()
+        ZipInputStream(openZip()).use { zis ->
             while (true) {
                 val entry = zis.nextEntry ?: break
-                if (entry.isDirectory) {
-                    zis.closeEntry()
-                    continue
-                }
-                val entryBytes = zis.readBytes()
-                zis.closeEntry()
                 val nestedName = entry.name.replace('\\', '/')
-                val resultKey = "$pathPrefix/$nestedName"
-                analyzePath(nestedName) { ByteArrayInputStream(entryBytes) }?.let { artifact ->
-                    results[resultKey] = artifact
+                if (!entry.isDirectory && findModuleIndices(nestedName).isNotEmpty()) {
+                    wanted.add(nestedName)
                 }
+                zis.closeEntry()
+            }
+        }
+        LogUtils.d(TAG, "analyzeNestedZip: prefix=$pathPrefix entries=$wanted")
+
+        val results = LinkedHashMap<String, Artifact>()
+        for (nestedName in wanted) {
+            analyzePath(nestedName) { openNestedEntry(openZip, nestedName) }?.let { artifact ->
+                results["$pathPrefix/$nestedName"] = artifact
             }
         }
         return results
     }
 
+    /** Reopen the nested zip and hand back its stream positioned at [nestedName]. */
+    @Throws(IOException::class)
+    private fun openNestedEntry(openZip: () -> InputStream, nestedName: String): InputStream {
+        val zis = ZipInputStream(openZip())
+        while (true) {
+            val entry = zis.nextEntry ?: break
+            if (entry.name.replace('\\', '/') == nestedName) return zis
+        }
+        zis.close()
+        throw IOException("$nestedName is no longer in the nested zip")
+    }
+
     /**
-     * If [path] is a bugreport zip, buffer and expand; otherwise match modules via [analyzePath].
+     * If [path] is a bugreport zip, expand it; otherwise match modules via [analyzePath].
      */
     @Throws(Exception::class)
     private fun analyzeEntry(path: String, openStream: () -> InputStream): Map<String, Artifact> {
         val normalized = path.replace('\\', '/')
         if (isBugreportZip(normalized)) {
             LogUtils.d(TAG, "Expanding nested bugreport zip: $normalized")
-            val bytes = openStream().use { it.readBytes() }
-            return streamAnalysisFromZipBytes(bytes, normalized)
+            return analyzeNestedZip(normalized, openStream)
         }
         val artifact = analyzePath(normalized, openStream) ?: return emptyMap()
         return mapOf(normalized to artifact)
