@@ -28,7 +28,7 @@ class SignatureParser {
      */
     @Throws(SignatureParsingException::class)
     fun parseAPKSignature(apk: File): APKSignatureInfo {
-        return parseVerified(ApkVerifier.Builder(apk).build())
+        return parseSignature(ApkVerifier.Builder(apk).build())
     }
 
     /**
@@ -37,11 +37,11 @@ class SignatureParser {
     @Throws(SignatureParsingException::class)
     fun parseAPKSignature(apkBytes: ByteArray): APKSignatureInfo {
         val dataSource = DataSources.asDataSource(ByteBuffer.wrap(apkBytes))
-        return parseVerified(ApkVerifier.Builder(dataSource).build())
+        return parseSignature(ApkVerifier.Builder(dataSource).build())
     }
 
     @Throws(SignatureParsingException::class)
-    private fun parseVerified(verifier: ApkVerifier): APKSignatureInfo {
+    private fun parseSignature(verifier: ApkVerifier): APKSignatureInfo {
         val result =
             try {
                 verifier.verify()
@@ -57,11 +57,14 @@ class SignatureParser {
 
         val certs =
             if (result.signerCertificates.isNotEmpty()) {
+                // apksig only returns verified certificates.
                 result.signerCertificates.map { CertificateParser.fromX509Certificate(it, verified) }
             } else {
                 val collected = mutableListOf<CertificateParser.CertificateInfo>()
                 fun addFromCert(cert: X509Certificate?) {
-                    cert?.let { collected.add(CertificateParser.fromX509Certificate(it, verified)) }
+                    // we hardcode a false, preventing edge-cases where apksig returns verified
+                    // but we end up manually loading unverified certificates.
+                    cert?.let { collected.add(CertificateParser.fromX509Certificate(it, false)) }
                 }
                 result.v4SchemeSigners.forEach { addFromCert(it.certificate) }
                 result.v31SchemeSigners.forEach { addFromCert(it.certificate) }
