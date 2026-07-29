@@ -57,8 +57,8 @@ public class SignatureParserTest {
 
     @Test
     public void testRepackagedApkIsNotTrustedEvenWhenAllowlisted() throws Exception {
-        File apk = ResourcesUtils.readResourceFile("apks/signed_test.apk");
-        byte[] repackaged = ApkTamperUtils.repackageWithTamperedEntry(apk, "resources.arsc");
+        File apk = ResourcesUtils.readResourceFile("apks/tampered_test.apk");
+        byte[] repackaged = Files.readAllBytes(apk.toPath());
 
         SignatureParser.APKSignatureInfo info =
                 new SignatureParser().parseAPKSignature(repackaged);

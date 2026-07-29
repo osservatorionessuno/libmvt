@@ -106,10 +106,10 @@ public class APKParserTest {
 
     @Test
     public void testRepackagedApkDoesNotSkipStaticAnalysis() throws Exception {
-        File apk = ResourcesUtils.readResourceFile("apks/signed_test.apk");
-        File repackaged = ApkTamperUtils.repackageWithTamperedEntryToFile(apk, "resources.arsc");
+        File signed = ResourcesUtils.readResourceFile("apks/signed_test.apk");
+        File repackaged = ResourcesUtils.readResourceFile("apks/tampered_test.apk");
 
-        String sha1 = APKParser.parseAPK(apk).getCertificates().get(0).getChecksums().getSha1();
+        String sha1 = APKParser.parseAPK(signed).getCertificates().get(0).getChecksums().getSha1();
 
         // Allowlist the signer, as if the repackaged app carried a vendor certificate.
         Utils.VALID_CERTIFICATES.add(sha1);
