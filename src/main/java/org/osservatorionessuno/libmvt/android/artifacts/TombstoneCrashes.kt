@@ -10,6 +10,9 @@ import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType
  * Parser for Android tombstone crash files.
  * - Text format: always supported.
  * - Protobuf format: parsed via [TombstoneProtobufParser] (protobuf-javalite wire API).
+ * 
+ * BEWARE: "process_name" contains the 15-char truncated thread name (e.g. android.hardwar),
+ * and is not the name of the process. Use "binary_path" instead.
  */
 class TombstoneCrashes : AndroidArtifact() {
 
@@ -26,6 +29,8 @@ class TombstoneCrashes : AndroidArtifact() {
 
     fun parseText(artifactInput: AbstractInput) {
         val rec = HashMap<String, Any?>()
+        // Only the first thread is the crashing thread.
+        var sawCrashPidLine = false
         forEachLine(artifactInput.inputStream) { raw ->
             val line = raw.trim()
             when {
@@ -41,27 +46,9 @@ class TombstoneCrashes : AndroidArtifact() {
                 line.startsWith("uid:") -> {
                     line.substring("uid:".length).trim().toIntOrNull()?.let { rec["uid"] = it }
                 }
-                line.startsWith("pid:") -> {
-                    // Example:
-                    // pid: 25541, tid: 21307, name: mtk.ape.decoder  >>> /vendor/bin/hw/android.hardware.media.c2@1.2-mediatek <<<
-                    val parts = line.split(",")
-                    if (parts.size >= 3) {
-                        parts[0].substringAfter(":").trim().toIntOrNull()?.let { rec["pid"] = it }
-                        parts[1].substringAfter(":").trim().toIntOrNull()?.let { rec["tid"] = it }
-                        var rest = parts[2].trim()
-                        if (rest.startsWith("name:")) {
-                            rest = rest.substring("name:".length).trim()
-                            val nameParts = rest.split(">>>")
-                            rec["process_name"] = nameParts[0].trim()
-                            if (nameParts.size >= 2) {
-                                val binaryPath = nameParts[1].trim().removeSuffix("<<<").trim()
-                                if (binaryPath.isNotEmpty()) {
-                                    rec["binary_path"] = binaryPath
-                                    extractPackageName(binaryPath)?.let { rec["package_name"] = it }
-                                }
-                            }
-                        }
-                    }
+                line.startsWith("pid:") && !sawCrashPidLine -> {
+                    parsePidLine(line, rec)
+                    sawCrashPidLine = true
                 }
             }
         }
@@ -86,6 +73,7 @@ class TombstoneCrashes : AndroidArtifact() {
         if (pb.commandLine.isNotEmpty()) {
             rec["command_line"] = ArrayList(pb.commandLine)
             pb.commandLine.firstOrNull()?.let { cmd ->
+                rec.putIfAbsent("binary_path", cmd)
                 extractPackageName(cmd)?.let { rec["package_name"] = it }
             }
         }
@@ -110,11 +98,15 @@ class TombstoneCrashes : AndroidArtifact() {
                 is String -> u.toIntOrNull()
                 else -> null
             }
-            val proc = map["process_name"] as? String
             if (uid != null && (uid == 0 || uid == 1000 || uid == 2000)) {
-                detected.add(Detection(DetectionType.TOMBSTONE_CRASHES_UID,
-                    proc ?: "",
-                    uid.toString()))
+                detected.add(
+                    Detection(
+                        DetectionType.TOMBSTONE_CRASHES_UID,
+                        crashLabel(map),
+                        uid.toString(),
+                        (map["timestamp"] as? String).orEmpty(),
+                    ),
+                )
             }
         }
     }
@@ -167,6 +159,56 @@ class TombstoneCrashes : AndroidArtifact() {
     }
 
     companion object {
+        /**
+         * Prefer the executable/cmdline basename.
+         */
+        @JvmStatic
+        fun crashLabel(map: Map<String, Any?>): String {
+            basenameOf(map["binary_path"] as? String)?.let { return it }
+            val cmd = (map["command_line"] as? List<*>)?.firstOrNull()?.toString()
+            basenameOf(cmd)?.let { return it }
+            return (map["package_name"] as? String).orEmpty()
+        }
+
+        private fun basenameOf(path: String?): String? {
+            if (path.isNullOrBlank()) return null
+            val base = path.substringAfterLast('/').trim()
+            return base.takeIf { it.isNotEmpty() }
+        }
+
+        @JvmStatic
+        fun parsePidLine(line: String, rec: MutableMap<String, Any?>) {
+            // Example (legacy):
+            // pid: 25541, tid: 21307, name: mtk.ape.decoder  >>> /vendor/bin/... <<<
+            // Example (newer, with ppid):
+            // pid: 1348, ppid: 1, tid: 1910, name: android.hardwar  >>> /vendor/bin/... <<<
+            val parts = if (line.contains(" >>> ")) {
+                line.split(" >>> ", limit = 2)
+            } else {
+                line.split(">>>", limit = 2)
+            }
+            val processInfo = parts[0]
+            for (info in processInfo.split(",")) {
+                val idx = info.indexOf(':')
+                if (idx < 0) continue
+                val key = info.substring(0, idx).trim()
+                val value = info.substring(idx + 1).trim()
+                when (key) {
+                    "pid" -> value.toIntOrNull()?.let { rec["pid"] = it }
+                    "tid" -> value.toIntOrNull()?.let { rec["tid"] = it }
+                    "name" -> if (value.isNotEmpty()) rec["process_name"] = value
+                }
+            }
+            if (parts.size >= 2) {
+                val binaryPath = parts[1].trim().removeSuffix("<<<").trim()
+                if (binaryPath.isEmpty()) {
+                    throw IllegalArgumentException("binaryPath is empty")
+                }
+                rec["binary_path"] = binaryPath
+                extractPackageName(binaryPath)?.let { rec["package_name"] = it }
+            }
+        }
+
         private fun extractPackageName(cmd: String): String? {
             if (cmd.isEmpty() || cmd.contains('/')) return null
             val base = cmd.substringBefore(':').trim()
