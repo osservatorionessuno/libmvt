@@ -34,6 +34,9 @@ public class GetProp extends AndroidArtifact {
         "ro.product.vendor.name"
     );
 
+    /** Kept from the stream, since the records themselves are not retained. */
+    private String deviceTimezone;
+
     @Override
     public List<String> paths() {
         return List.of("getprop.txt");
@@ -41,7 +44,6 @@ public class GetProp extends AndroidArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
-        results.clear();
         forEachLine(artifactInput.inputStream, line -> {
             line = line.trim();
             if (line.isEmpty()) return;
@@ -50,51 +52,41 @@ public class GetProp extends AndroidArtifact {
             Map<String, String> entry = new HashMap<>();
             entry.put("name", m.group(1));
             entry.put("value", m.group(2));
-            results.add(entry);
+            emit(entry);
         });
     }
 
     @Override
-    public void checkIndicators() {
-        for (Object obj : results) {
-            @SuppressWarnings("unchecked")
-            Map<String, String> map = (Map<String, String>) obj;
-            String name = map.get("name");
-            if (Objects.equals(name, "ro.build.version.security_patch")) {
-                String patchLevel = map.get("value");
-                if (daysSinceSecurityPatchLevel(patchLevel) > 180) {
-                    detected.add(new Detection(DetectionType.GETPROP_SECURITY_PATCH, patchLevel));
-                }
-                continue;
-            }
-            /*
-            // MVT prints interesting properties as LOG level, we don't really need to report them
-            if (INTERESTING_PROPERTIES.contains(name)) {
-                detected.add(...);
-            }
-            */
-            // TODO: Check for model and manufacturer
-        }
+    protected void checkRecord(Object record) {
+        @SuppressWarnings("unchecked")
+        Map<String, String> property = (Map<String, String>) record;
+        String name = property.get("name");
+        String value = property.get("value");
 
-        if (indicators == null) return;
-        for (Object obj : results) {
-            @SuppressWarnings("unchecked")
-            Map<String, String> map = (Map<String, String>) obj;
-            String name = map.get("name");
-            detected.addAll(indicators.matchString(name, IndicatorType.PROPERTY));
+        // First occurrence wins, as when the whole property list was scanned in order.
+        if (deviceTimezone == null && "persist.sys.timezone".equals(name)) {
+            deviceTimezone = value;
         }
+        if (Objects.equals(name, "ro.build.version.security_patch")
+                && daysSinceSecurityPatchLevel(value) > 180) {
+            detected.add(new Detection(DetectionType.GETPROP_SECURITY_PATCH, value));
+        }
+        /*
+        // MVT prints interesting properties as LOG level, we don't really need to report them
+        if (INTERESTING_PROPERTIES.contains(name)) {
+            detected.add(...);
+        }
+        */
+        // TODO: Check for model and manufacturer
+
+        // Every property is matched, including the ones handled above.
+        if (indicators == null) return;
+        detected.addAll(indicators.matchString(name, IndicatorType.PROPERTY));
     }
 
     /** Helper to obtain the timezone property value. */
     public String getDeviceTimezone() {
-        for (Object obj : results) {
-            @SuppressWarnings("unchecked")
-            Map<String, String> map = (Map<String, String>) obj;
-            if ("persist.sys.timezone".equals(map.get("name"))) {
-                return map.get("value");
-            }
-        }
-        return null;
+        return deviceTimezone;
     }
 
     private long daysSinceSecurityPatchLevel(String patchLevel) {

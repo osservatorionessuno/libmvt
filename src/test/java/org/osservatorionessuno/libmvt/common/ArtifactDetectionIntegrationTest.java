@@ -17,24 +17,21 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.loadTestIndicators;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.streamArtifact;
 
 public class ArtifactDetectionIntegrationTest {
 
     @Test
     public void fromArtifactsToJsonArray() throws Exception {
-        RootBinaries rootBinaries = new RootBinaries();
-        rootBinaries.setStringResolver(new JvmMapStringResolver());
+        RootBinaries rootBinaries;
         try (InputStream data = ResourcesUtils.readResource("androidqf/root_binaries.json")) {
-            rootBinaries.parse(new AbstractInput("root_binaries.json", data) {});
+            rootBinaries = streamArtifact(RootBinaries::new, "root_binaries.json", data);
         }
-        rootBinaries.checkIndicators();
 
-        GetProp getProp = new GetProp();
+        GetProp getProp;
         try (InputStream data = ResourcesUtils.readResource("androidqf/getprop.txt")) {
-            getProp.parse(new AbstractInput("getprop.txt", data) {});
+            getProp = streamArtifact(GetProp::new, "getprop.txt", data, loadTestIndicators());
         }
-        getProp.setIndicators(loadTestIndicators());
-        getProp.checkIndicators();
 
         assertDetectionValueContains(
                 rootBinaries.detected, DetectionType.ROOT_BINARIES, "/system/xbin/su");

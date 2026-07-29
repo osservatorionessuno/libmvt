@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -37,18 +38,6 @@ public final class DetectionTestUtils {
         return indicators;
     }
 
-    public static void runIocCheck(Artifact artifact) throws Exception {
-        artifact.setIndicators(loadTestIndicators());
-        artifact.checkIndicators();
-    }
-
-    public static <T extends Artifact> T parseArtifact(
-            Supplier<T> factory,
-            String path,
-            InputStream data) throws Exception {
-        return parseArtifact(factory, path, data, ignored -> {});
-    }
-
     public static <T extends Artifact> T parseArtifact(
             Supplier<T> factory,
             String path,
@@ -60,11 +49,49 @@ public final class DetectionTestUtils {
         return artifact;
     }
 
-    public static <T extends AndroidArtifact> T parseAndroidArtifact(
+    /**
+     * Parses the way ForensicRunner does: indicators first, since records are checked as they
+     * stream in and then dropped, followed by the final checkIndicators pass. Records a test
+     * needs to inspect are collected into {@code records}; pass null to keep nothing.
+     */
+    public static <T extends AndroidArtifact> T streamArtifact(
+            Supplier<T> factory,
+            String path,
+            InputStream data,
+            Indicators indicators,
+            List<Object> records) throws Exception {
+        T artifact = parseArtifact(factory, path, data, a -> {
+            a.setStringResolver(new JvmMapStringResolver());
+            a.setIndicators(indicators);
+            if (records != null) a.setRecordObserver(records::add);
+        });
+        artifact.checkIndicators();
+        return artifact;
+    }
+
+    public static <T extends AndroidArtifact> T streamArtifact(
+            Supplier<T> factory,
+            String path,
+            InputStream data,
+            Indicators indicators) throws Exception {
+        return streamArtifact(factory, path, data, indicators, null);
+    }
+
+    public static <T extends AndroidArtifact> T streamArtifact(
             Supplier<T> factory,
             String path,
             InputStream data) throws Exception {
-        return parseArtifact(factory, path, data, artifact -> artifact.setStringResolver(new JvmMapStringResolver()));
+        return streamArtifact(factory, path, data, null, null);
+    }
+
+    /** The records a module emitted, for tests that assert on parsed values. */
+    public static <T extends AndroidArtifact> List<Object> streamRecords(
+            Supplier<T> factory,
+            String path,
+            InputStream data) throws Exception {
+        List<Object> records = new ArrayList<>();
+        streamArtifact(factory, path, data, null, records);
+        return records;
     }
 
     public static void assertDetection(

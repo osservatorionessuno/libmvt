@@ -5,7 +5,6 @@ import org.osservatorionessuno.libmvt.ResourcesUtils;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Indicators;
-import org.osservatorionessuno.libmvt.common.JvmMapStringResolver;
 
 import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
@@ -15,33 +14,17 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetection;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
-import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.parseArtifact;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.streamArtifact;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.streamRecords;
 
 public class FilesTest {
 
-    /**
-     * Files streams: every record is checked and then dropped, so getResults() stays empty.
-     * Decoded records are observed through recordObserver instead, and indicators have to be
-     * set before parse because there is nothing left to re-check afterwards.
-     */
-    private static Files parse(String path, InputStream data, List<Object> sink, Consumer<Files> configure)
-            throws Exception {
-        return parseArtifact(Files::new, path, data, files -> {
-            files.setStringResolver(new JvmMapStringResolver());
-            files.setRecordObserver(sink::add);
-            configure.accept(files);
-        });
-    }
-
     private static List<Object> records(String path, InputStream data) throws Exception {
-        List<Object> sink = new ArrayList<>();
-        parse(path, data, sink, files -> { });
-        return sink;
+        return streamRecords(Files::new, path, data);
     }
 
     /**
@@ -93,13 +76,15 @@ public class FilesTest {
         assertEquals(36L, first.get("size"));
     }
 
-    /** Nothing is retained, whatever the artifact's size. */
+    /** Records are observed as they stream, and nothing is retained beyond the count. */
     @Test
-    public void testResultsAreNotRetained() throws Exception {
+    public void testRecordsAreNotRetained() throws Exception {
         List<Object> sink = new ArrayList<>();
-        Files files = parse("files.pb", ResourcesUtils.readResource("androidqf/files.pb"), sink, f -> { });
+        Files files = streamArtifact(
+                Files::new, "files.pb", ResourcesUtils.readResource("androidqf/files.pb"), null, sink);
+
         assertEquals(3, sink.size());
-        assertTrue(files.getResults().isEmpty());
+        assertEquals(3, files.getRecordCount());
     }
 
     @Test
@@ -125,12 +110,10 @@ public class FilesTest {
     /** The suspicious-path heuristic needs no indicators. */
     @Test
     public void testSuspiciousExecutablePath() throws Exception {
-        List<Object> sink = new ArrayList<>();
-        Files files = parse(
+        Files files = streamArtifact(
+                Files::new,
                 "files.json",
-                json("[{\"path\":\"/data/local/tmp/evil\",\"mode\":\"-rwxr-xr-x\",\"size\":123}]"),
-                sink,
-                f -> { });
+                json("[{\"path\":\"/data/local/tmp/evil\",\"mode\":\"-rwxr-xr-x\",\"size\":123}]"));
 
         assertEquals(1, files.detected.size());
         assertDetection(files.detected, DetectionType.FILES_SUSPICIOUS_PATH, AlertLevel.HIGH);
@@ -161,12 +144,11 @@ public class FilesTest {
 
     /** Second value of the FILES_SUSPICIOUS_PATH detection for a given JSON mode literal. */
     private static String fileTypeFor(String modeJson) throws Exception {
-        List<Object> sink = new ArrayList<>();
-        Files files = parse(
+        Files files = streamArtifact(
+                Files::new,
                 "files.json",
-                json("[{\"path\":\"/data/local/tmp/x\",\"mode\":" + modeJson + "}]"),
-                sink,
-                f -> { });
+                json("[{\"path\":\"/data/local/tmp/x\",\"mode\":" + modeJson + "}]"));
+
         assertEquals(1, files.detected.size(), "mode=" + modeJson);
         return files.detected.get(0).getValue().get(1);
     }
@@ -177,12 +159,11 @@ public class FilesTest {
         Indicators indicators = indicators(
                 "{ \"indicators\": [ { \"file:hashes.sha256\": [ \"" + sha256 + "\" ] } ] }");
 
-        List<Object> sink = new ArrayList<>();
-        Files files = parse(
+        Files files = streamArtifact(
+                Files::new,
                 "files.json",
                 json(String.format("[{\"path\":\"/system/app/sample\",\"sha256\":\"%s\"}]", sha256)),
-                sink,
-                f -> f.setIndicators(indicators));
+                indicators);
 
         assertEquals(1, files.detected.size());
         assertDetection(files.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL);

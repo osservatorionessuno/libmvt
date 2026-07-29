@@ -43,11 +43,11 @@ public class ForensicRunnerTest {
         assertTrue(res.containsKey("ps.txt"));
         Artifact proc = res.get("ps.txt");
         assertNotNull(proc);
-        assertTrue(proc.getResults().size() > 0);
+        assertTrue(proc.getRecordCount() > 0);
 
         assertTrue(res.containsKey("getprop.txt"));
         assertNotNull(res.get("getprop.txt"));
-        assertTrue(res.get("getprop.txt").getResults().size() > 0);
+        assertTrue(res.get("getprop.txt").getRecordCount() > 0);
     }
 
     @Test
@@ -59,7 +59,7 @@ public class ForensicRunnerTest {
         Artifact art = res.get("getprop.txt");
 
         assertNotNull(art);
-        assertTrue(art.getResults().size() > 0);
+        assertTrue(art.getRecordCount() > 0);
     }
 
     @Test
@@ -89,7 +89,7 @@ public class ForensicRunnerTest {
         assertTrue(res.containsKey("FS/data/tombstones/tombstone_01"));
         Artifact tombstone = res.get("FS/data/tombstones/tombstone_01");
         assertNotNull(tombstone);
-        assertTrue(tombstone.getResults().size() > 0);
+        assertTrue(tombstone.getRecordCount() > 0);
     }
 
     @Test
@@ -110,12 +110,12 @@ public class ForensicRunnerTest {
         // The healthy modules still run.
         assertTrue(res.containsKey("selinux.txt"));
         assertTrue(res.containsKey("getprop.txt"));
-        assertTrue(res.get("getprop.txt").getResults().size() > 0);
+        assertTrue(res.get("getprop.txt").getRecordCount() > 0);
 
         // The corrupt one parses nothing but reports the lost coverage.
         Artifact skipped = res.get("root_binaries.pb");
         assertNotNull(skipped);
-        assertEquals(0, skipped.getResults().size());
+        assertEquals(0, skipped.getRecordCount());
         assertDetectionValueContains(
                 skipped.detected, DetectionType.ARTIFACT_PARSE_FAILED, "RootBinaries");
     }
@@ -145,7 +145,41 @@ public class ForensicRunnerTest {
 
         // DumpsysAppops is dropped and reported; DumpsysPlatformCompat still contributes.
         assertNotNull(art);
-        assertTrue(art.getResults().size() > 0);
+        assertTrue(art.getRecordCount() > 0);
+        assertDetectionValueContains(
+                art.detected, DetectionType.ARTIFACT_PARSE_FAILED, "DumpsysAppops");
+    }
+
+    /**
+     * DumpsysAppops holds its risky-permission detections back so it can order them, handing
+     * them over in checkIndicators. A parse that dies afterwards must not take them with it:
+     * com.android.shell is fully parsed before the malformed line, so its grant is a real
+     * finding and reporting only ARTIFACT_PARSE_FAILED would read as "nothing found".
+     */
+    @Test
+    public void testHeldBackDetectionsSurviveAMidParseFailure() throws Exception {
+        String dumpsys = """
+                DUMP OF SERVICE appops:
+                  Uid 0:
+                    Package com.android.shell:
+                      REQUEST_INSTALL_PACKAGES (allow):
+                          Access: [top-s] 2022-02-02 23:20:13.096 (-14h43m52s765ms)
+                    Package com.example:
+                      REQUEST_INSTALL_PACKAGES x
+                """;
+        byte[] data = dumpsys.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+
+        ForensicRunner runner = new ForensicRunner(new JvmMapStringResolver());
+        runner.setIndicators(DetectionTestUtils.loadTestIndicators());
+
+        Artifact art = runner.streamFileAnalysis(
+                        ReopenableInput.of("dumpsys.txt", () -> new ByteArrayInputStream(data)))
+                .get("dumpsys.txt");
+
+        assertNotNull(art);
+        assertDetectionValueContains(
+                art.detected, DetectionType.APPOPS_RISKY_PERMISSION, "com.android.shell");
+        // The lost coverage is still reported alongside what was found.
         assertDetectionValueContains(
                 art.detected, DetectionType.ARTIFACT_PARSE_FAILED, "DumpsysAppops");
     }
@@ -163,7 +197,7 @@ public class ForensicRunnerTest {
 
         Map<String, Artifact> res = runner.streamFileAnalysis(input);
         assertTrue(res.containsKey("dumpsys.txt"));
-        assertTrue(res.get("dumpsys.txt").getResults().size() > 0);
+        assertTrue(res.get("dumpsys.txt").getRecordCount() > 0);
     }
 
     @Test
@@ -188,7 +222,7 @@ public class ForensicRunnerTest {
         Map<String, Artifact> res = runner.streamAnalysisFromZip(zipFile);
 
         assertTrue(res.containsKey("getprop.txt"));
-        assertTrue(res.get("getprop.txt").getResults().size() > 0);
+        assertTrue(res.get("getprop.txt").getRecordCount() > 0);
     }
 
     @Test
@@ -211,7 +245,7 @@ public class ForensicRunnerTest {
 
         assertTrue(res.containsKey("getprop.txt"));
         assertTrue(res.containsKey(TOMBSTONE_KEY));
-        assertTrue(res.get(TOMBSTONE_KEY).getResults().size() > 0);
+        assertTrue(res.get(TOMBSTONE_KEY).getRecordCount() > 0);
     }
 
     @Test
@@ -225,7 +259,7 @@ public class ForensicRunnerTest {
         Map<String, Artifact> res = runner.streamFileAnalysis(input);
 
         assertTrue(res.containsKey(TOMBSTONE_KEY));
-        assertTrue(res.get(TOMBSTONE_KEY).getResults().size() > 0);
+        assertTrue(res.get(TOMBSTONE_KEY).getRecordCount() > 0);
     }
 
     @Test
@@ -240,7 +274,7 @@ public class ForensicRunnerTest {
         Map<String, Artifact> res = runner.streamLegacyAnalysisFromDirectory(tempDir.toFile());
 
         assertTrue(res.containsKey(TOMBSTONE_KEY));
-        assertTrue(res.get(TOMBSTONE_KEY).getResults().size() > 0);
+        assertTrue(res.get(TOMBSTONE_KEY).getRecordCount() > 0);
     }
 
     @Test
@@ -272,7 +306,7 @@ public class ForensicRunnerTest {
         assertTrue(res.containsKey("bugreport.zip/dumpsys.txt"));
         assertTrue(res.containsKey("bugreport.zip/getprop.txt"));
         assertFalse(res.containsKey("bugreport.zip/FS/data/junk.bin"));
-        assertTrue(res.get("bugreport.zip/dumpsys.txt").getResults().size() > 0);
+        assertTrue(res.get("bugreport.zip/dumpsys.txt").getRecordCount() > 0);
 
         // One pass to list the entries, then one reopen per module: nothing is buffered, and
         // junk.bin costs no opens at all.
@@ -305,7 +339,7 @@ public class ForensicRunnerTest {
 
         // The rest of the acquisition still parses...
         assertTrue(res.containsKey("getprop.txt"));
-        assertTrue(res.get("getprop.txt").getResults().size() > 0);
+        assertTrue(res.get("getprop.txt").getRecordCount() > 0);
 
         // ...and the unread part of the bugreport reads as "not analysed", not as "clean".
         Artifact skipped = res.get("bugreport.zip");

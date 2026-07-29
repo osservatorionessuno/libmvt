@@ -2,7 +2,6 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
-import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.DetectionType;
 
 import java.io.ByteArrayInputStream;
@@ -11,17 +10,21 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.parseArtifact;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.streamRecords;
 
 public class DumpsysAdbTest {
 
     @Test
     public void testParsing() throws Exception {
-        DumpsysAdb da = new DumpsysAdb();
-        String data = ResourcesUtils.readResourceString("android_data/dumpsys_adb.txt");
-        da.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
-        assertEquals(1, da.getResults().size());
+        List<Object> parsed = streamRecords(
+                DumpsysAdb::new,
+                "dumpsys.txt",
+                ResourcesUtils.readResource("android_data/dumpsys_adb.txt"));
+        assertEquals(1, parsed.size());
+
         @SuppressWarnings("unchecked")
-        Map<String, Object> result = (Map<String, Object>) da.getResults().get(0);
+        Map<String, Object> result = (Map<String, Object>) parsed.get(0);
         @SuppressWarnings("unchecked")
         List<Map<String, String>> keys = (List<Map<String, String>>) result.get("user_keys");
         assertEquals(1, keys.size());
@@ -32,12 +35,14 @@ public class DumpsysAdbTest {
 
     @Test
     public void testParsingXml() throws Exception {
-        DumpsysAdb da = new DumpsysAdb();
-        String data = ResourcesUtils.readResourceString("android_data/dumpsys_adb_xml.txt");
-        da.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
-        assertEquals(1, da.getResults().size());
+        List<Object> parsed = streamRecords(
+                DumpsysAdb::new,
+                "dumpsys.txt",
+                ResourcesUtils.readResource("android_data/dumpsys_adb_xml.txt"));
+        assertEquals(1, parsed.size());
+
         @SuppressWarnings("unchecked")
-        Map<String, Object> result = (Map<String, Object>) da.getResults().get(0);
+        Map<String, Object> result = (Map<String, Object>) parsed.get(0);
         @SuppressWarnings("unchecked")
         List<Map<String, String>> keys = (List<Map<String, String>>) result.get("user_keys");
         assertEquals(1, keys.size());
@@ -53,13 +58,12 @@ public class DumpsysAdbTest {
 
     @Test
     public void testHostKeyDetectedSeparately() throws Exception {
-        DumpsysAdb da = new DumpsysAdb();
         String data = ResourcesUtils.readResourceString("android_data/dumpsys_adb.txt");
-        String hostKey = extractUserKeyLine(data);
-
-        da.setHostKeys(List.of(hostKey));
-        da.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
-        da.checkIndicators();
+        DumpsysAdb da = parseArtifact(
+                DumpsysAdb::new,
+                "dumpsys.txt",
+                new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)),
+                a -> a.setHostKeys(List.of(extractUserKeyLine(data))));
 
         assertEquals(1, da.detected.size());
         assertEquals(DetectionType.ADB_HOST_FINGERPRINT.getId(), da.detected.get(0).getId());
@@ -67,12 +71,12 @@ public class DumpsysAdbTest {
 
     @Test
     public void testUnknownKeyStillDetected() throws Exception {
-        DumpsysAdb da = new DumpsysAdb();
         String data = ResourcesUtils.readResourceString("android_data/dumpsys_adb.txt");
-
-        da.setHostKeys(List.of("QAAAAG5vdC10aGUtc2FtZS1rZXk= other@host"));
-        da.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
-        da.checkIndicators();
+        DumpsysAdb da = parseArtifact(
+                DumpsysAdb::new,
+                "dumpsys.txt",
+                new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)),
+                a -> a.setHostKeys(List.of("QAAAAG5vdC10aGUtc2FtZS1rZXk= other@host")));
 
         assertEquals(1, da.detected.size());
         assertEquals(DetectionType.ADB_FINGERPRINT.getId(), da.detected.get(0).getId());

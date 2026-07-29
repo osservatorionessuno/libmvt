@@ -13,9 +13,15 @@ public class DumpsysAppops extends DumpsysArtifact {
     private static final Set<String> RISKY_PERMISSIONS = Set.of("REQUEST_INSTALL_PACKAGES");
     private static final Set<String> RISKY_PACKAGES = Set.of("com.android.shell");
 
+    /**
+     * Risky-permission detections, held back until every package has streamed in: they are
+     * reported chronologically, and a package's entries only sort against the other packages'.
+     * Holds one entry per risky grant, which a hostile dump can still make arbitrarily long.
+     */
+    private final List<Detection> riskyPermissions = new ArrayList<>();
+
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
-        results.clear();
         Map<String, Object>[] pkg = new Map[] { null };
         Map<String, Object>[] perm = new Map[] { new HashMap<>() };
         Map<String, Object>[] entry = new Map[] { new HashMap<>() };
@@ -32,7 +38,7 @@ public class DumpsysAppops extends DumpsysArtifact {
                 if (!entry[0].isEmpty()) { addEntry(perm[0], entry[0]); entry[0] = new HashMap<>(); }
                 if (pkg[0] != null) {
                     finishPerm(pkg[0], perm[0]);
-                    results.add(pkg[0]);
+                    emit(pkg[0]);
                 }
                 pkg[0] = null;
                 perm[0] = new HashMap<>();
@@ -42,7 +48,7 @@ public class DumpsysAppops extends DumpsysArtifact {
                 if (!entry[0].isEmpty()) { addEntry(perm[0], entry[0]); entry[0] = new HashMap<>(); }
                 if (pkg[0] != null) {
                     finishPerm(pkg[0], perm[0]);
-                    results.add(pkg[0]);
+                    emit(pkg[0]);
                 }
                 pkg[0] = new HashMap<>();
                 pkg[0].put("package_name", line.substring(12, line.length() - 1));
@@ -81,7 +87,7 @@ public class DumpsysAppops extends DumpsysArtifact {
         });
         if (!entry[0].isEmpty()) addEntry(perm[0], entry[0]);
         finishPerm(pkg[0], perm[0]);
-        if (pkg[0] != null) results.add(pkg[0]);
+        if (pkg[0] != null) emit(pkg[0]);
     }
 
     @SuppressWarnings("unchecked")
@@ -97,53 +103,55 @@ public class DumpsysAppops extends DumpsysArtifact {
     }
 
     @Override
-    public void checkIndicators() {
+    protected void checkRecord(Object record) {
         if (indicators == null) return;
-        List<Detection> appopsDetections = new ArrayList<>();
-        for (Object obj : results) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> map = (Map<String, Object>) record;
+        String pkgName = (String) map.get("package_name");
+        detected.addAll(indicators.matchString(pkgName, IndicatorType.APP_ID));
+
+        boolean riskyPkg = RISKY_PACKAGES.contains(pkgName);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> perms = (List<Map<String, Object>>) map.get("permissions");
+        if (perms == null) return;
+
+        for (Map<String, Object> perm : perms) {
+            String permName = (String) perm.get("name");
+            if (!RISKY_PERMISSIONS.contains(permName) && !riskyPkg) {
+                continue;
+            }
+
             @SuppressWarnings("unchecked")
-            Map<String, Object> map = (Map<String, Object>) obj;
-            String pkgName = (String) map.get("package_name");
-            detected.addAll(indicators.matchString(pkgName, IndicatorType.APP_ID));
+            List<Map<String, Object>> entries =
+                    (List<Map<String, Object>>) perm.get("entries");
+            if (entries == null || entries.isEmpty()) {
+                riskyPermissions.add(new Detection(
+                        DetectionType.APPOPS_RISKY_PERMISSION,
+                        pkgName,
+                        permName,
+                        String.valueOf(perm.get("access")),
+                        ""));
+                continue;
+            }
 
-            boolean riskyPkg = RISKY_PACKAGES.contains(pkgName);
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> perms = (List<Map<String, Object>>) map.get("permissions");
-            if (perms == null) continue;
-
-            for (Map<String, Object> perm : perms) {
-                String permName = (String) perm.get("name");
-                if (!RISKY_PERMISSIONS.contains(permName) && !riskyPkg) {
-                    continue;
-                }
-
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> entries =
-                        (List<Map<String, Object>>) perm.get("entries");
-                if (entries == null || entries.isEmpty()) {
-                    appopsDetections.add(new Detection(
-                            DetectionType.APPOPS_RISKY_PERMISSION,
-                            pkgName,
-                            permName,
-                            String.valueOf(perm.get("access")),
-                            ""));
-                    continue;
-                }
-
-                for (Map<String, Object> entry : entries) {
-                    Object timestamp = entry.get("timestamp");
-                    appopsDetections.add(new Detection(
-                            DetectionType.APPOPS_RISKY_PERMISSION,
-                            pkgName,
-                            permName,
-                            String.valueOf(entry.get("access")),
-                            timestamp != null ? String.valueOf(timestamp) : ""));
-                }
+            for (Map<String, Object> entry : entries) {
+                Object timestamp = entry.get("timestamp");
+                riskyPermissions.add(new Detection(
+                        DetectionType.APPOPS_RISKY_PERMISSION,
+                        pkgName,
+                        permName,
+                        String.valueOf(entry.get("access")),
+                        timestamp != null ? String.valueOf(timestamp) : ""));
             }
         }
+    }
+
+    @Override
+    public void checkIndicators() {
         // yyyy-MM-dd HH:mm:ss[.SSS] sorts chronologically as plain strings
-        appopsDetections.sort(Comparator.comparing(d ->
+        riskyPermissions.sort(Comparator.comparing(d ->
                 d.getValue().size() > 3 ? d.getValue().get(3) : ""));
-        detected.addAll(appopsDetections);
+        detected.addAll(riskyPermissions);
+        riskyPermissions.clear();
     }
 }

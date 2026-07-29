@@ -20,11 +20,6 @@ public class FileTimestamps extends AndroidArtifact {
         // No parsing implemented; timestamps are expected as structured records.
     }
 
-    @Override
-    public void checkIndicators() {
-        // No IOC matching for this artifact.
-    }
-
     /** Serialize a record with access/modified/changed times to timeline entries. */
     public List<Map<String, Object>> serialize(Map<String, Object> record) {
         List<Map<String, Object>> list = new ArrayList<>();

@@ -13,7 +13,6 @@ public class DumpsysAccessibility extends DumpsysArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
-        results.clear();
         Pattern legacyPattern = Pattern.compile("\\s*(\\d+) : (.+)");
         Pattern v14Pattern = Pattern.compile("\\{\\{(.+?)\\}\\}", Pattern.DOTALL);
         boolean[] inLegacyBlock = {false};
@@ -38,7 +37,7 @@ public class DumpsysAccessibility extends DumpsysArtifact {
                     Map<String, String> result = new HashMap<>();
                     result.put("package_name", packageName);
                     result.put("service", fullService);
-                    results.add(result);
+                    emit(result);
                 }
                 return;
             }
@@ -55,7 +54,7 @@ public class DumpsysAccessibility extends DumpsysArtifact {
                     Map<String, String> result = new HashMap<>();
                     result.put("package_name", packageName);
                     result.put("service", service.isEmpty() ? fullService : service);
-                    results.add(result);
+                    emit(result);
                     inV14Search[0] = false;
                 }
             }
@@ -63,14 +62,10 @@ public class DumpsysAccessibility extends DumpsysArtifact {
     }
 
     @Override
-    public void checkIndicators() {
+    protected void checkRecord(Object record) {
         if (indicators == null) return;
-
-        for (Object obj : results) {
-            @SuppressWarnings("unchecked")
-            Map<String, String> record = (Map<String, String>) obj;
-            String pkg = record.get("package_name");
-            detected.addAll(indicators.matchString(pkg, IndicatorType.APP_ID));
-        }
+        @SuppressWarnings("unchecked")
+        Map<String, String> service = (Map<String, String>) record;
+        detected.addAll(indicators.matchString(service.get("package_name"), IndicatorType.APP_ID));
     }
 }

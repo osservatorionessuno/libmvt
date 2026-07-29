@@ -35,7 +35,6 @@ public class Files extends AndroidArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
-        results.clear();
         try {
             parseByExtension(artifactInput, this::parseProtobuf, this::parseJson);
         } catch (IOException e) {
@@ -106,11 +105,6 @@ public class Files extends AndroidArtifact {
                 }
             }
         }
-    }
-
-    /** Records are checked by {@link #checkRecord} as they stream in; none are retained. */
-    @Override
-    public void checkIndicators() {
     }
 
     @Override

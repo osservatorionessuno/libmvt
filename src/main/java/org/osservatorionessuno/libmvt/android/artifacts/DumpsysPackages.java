@@ -17,6 +17,8 @@ import java.io.InputStream;
  */
 public class DumpsysPackages extends DumpsysArtifact {
 
+    private static final Pattern PACKAGE_RX = Pattern.compile("  Package \\[(.+?)\\].*");
+
     private static class PackageDetails {
         String packageName = "";
         String uid = "";
@@ -114,49 +116,13 @@ public class DumpsysPackages extends DumpsysArtifact {
         return d;
     }
 
-    List<Map<String, Object>> parsePackages(String output) {
-        Pattern pkgRx = Pattern.compile("  Package \\[(.+?)\\].*");
-        List<Map<String, Object>> result = new ArrayList<>();
-        String packageName = null;
-        List<String> lines = new ArrayList<>();
-        Map<String, Object> current = new HashMap<>();
-        for (String line : output.split("\n")) {
-            if (line.startsWith("  Package [")) {
-                if (!lines.isEmpty()) {
-                    PackageDetails d = parsePackageBlock(lines);
-                    d.packageName = packageName;
-                    current.putAll(toMap(d));
-                    result.add(current);
-                }
-                lines = new ArrayList<>();
-                current = new HashMap<>();
-                Matcher m = pkgRx.matcher(line);
-                if (m.find()) {
-                    packageName = m.group(1);
-                    current.put("package_name", packageName);
-                } else {
-                    packageName = null;
-                }
-                continue;
-            }
-            if (packageName == null) continue;
-            lines.add(line);
-        }
-       if (!lines.isEmpty()) {
-            PackageDetails d = parsePackageBlock(lines);
-            d.packageName = packageName;
-            current.putAll(toMap(d));
-            result.add(current);
-       }
-        return result;
-    }
-
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
-        results.clear();
         boolean[] inPackageList = { false };
         boolean[] done = { false };
-        StringBuilder packageLines = new StringBuilder();
+        String[] packageName = { null };
+        // Only the block being read is buffered, never the whole package list.
+        List<String> block = new ArrayList<>();
 
         extractDumpsysSection(artifactInput.inputStream, "package:", line -> {
             if (done[0]) return;
@@ -169,27 +135,38 @@ public class DumpsysPackages extends DumpsysArtifact {
                 done[0] = true;
                 return;
             }
-            if (packageLines.length() > 0) packageLines.append('\n');
-            packageLines.append(line);
+            if (line.startsWith("  Package [")) {
+                // A block ends where the next one starts, so the previous package flushes here.
+                emitPackage(packageName[0], block);
+                Matcher m = PACKAGE_RX.matcher(line);
+                packageName[0] = m.find() ? m.group(1) : null;
+                return;
+            }
+            if (packageName[0] != null) block.add(line);
         });
-        if (packageLines.length() > 0) {
-            results.addAll(parsePackages(packageLines.toString()));
+        emitPackage(packageName[0], block);
+    }
+
+    private void emitPackage(String packageName, List<String> block) {
+        if (packageName != null && !block.isEmpty()) {
+            PackageDetails details = parsePackageBlock(block);
+            details.packageName = packageName;
+            emit(toMap(details));
         }
+        block.clear();
     }
 
     @Override
-    public void checkIndicators() {
-        for (Object obj : results) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> record = (Map<String, Object>) obj;
-            String pkg = (String) record.get("package_name");
-            if (Utils.ROOT_PACKAGES.contains(pkg)) {
-                detected.add(new Detection(DetectionType.PACKAGES_ROOT_PACKAGE, pkg));
-                continue;
-            }
-            if (indicators != null) {
-                detected.addAll(indicators.matchString(pkg, IndicatorType.APP_ID));
-            }
+    protected void checkRecord(Object record) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> pkg = (Map<String, Object>) record;
+        String name = (String) pkg.get("package_name");
+        if (Utils.ROOT_PACKAGES.contains(name)) {
+            detected.add(new Detection(DetectionType.PACKAGES_ROOT_PACKAGE, name));
+            return;
+        }
+        if (indicators != null) {
+            detected.addAll(indicators.matchString(name, IndicatorType.APP_ID));
         }
     }
 }

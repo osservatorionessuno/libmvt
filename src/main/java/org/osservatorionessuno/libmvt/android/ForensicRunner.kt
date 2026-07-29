@@ -32,8 +32,6 @@ private class SkippedArtifact : AndroidArtifact() {
     override fun paths(): List<String> = emptyList()
 
     override fun parse(artifactInput: AbstractInput) = Unit
-
-    override fun checkIndicators() = Unit
 }
 
 /**
@@ -44,8 +42,8 @@ private class SkippedArtifact : AndroidArtifact() {
  * - Each module declares path patterns via [AndroidArtifact.paths] (exact or glob).
  * - Every matching module receives an [ArtifactInput]; only the module should read its stream.
  * - Custom stream sources use [ReopenableInput] so each module gets a fresh stream.
- * - A fresh module instance is created per parse; results are then merged.
- * - A module that throws is dropped and logged; the rest of the acquisition still runs.
+ * - A fresh module instance is created per parse; their findings are then merged.
+ * - A module that throws is logged and reported, keeping what it found; the acquisition runs on.
  * - [SKIP_FILES] and paths under `tmp/` are ignored.
  * - Nested [BUGREPORT_ZIP] entries are expanded and analyzed like a zip archive.
  */
@@ -220,10 +218,15 @@ class ForensicRunner(private val stringResolver: StringResolver) {
         for (index in moduleIndices) {
             val module = ArtifactModuleRegistry.create(index)
             try {
-                openStream().use { stream ->
-                    // Before parse: streaming modules check each record as it is decoded.
-                    prepareArtifact(module)
-                    module.parse(ArtifactInput(path, stream))
+                try {
+                    openStream().use { stream ->
+                        // Before parse: modules check each record as it is decoded, then drop it.
+                        prepareArtifact(module)
+                        module.parse(ArtifactInput(path, stream))
+                    }
+                } finally {
+                    // Run even when parse throws: checkIndicators is where a module hands over
+                    // detections it had to hold back for ordering, so skipping it loses them.
                     module.checkIndicators()
                 }
             } catch (e: CancellationException) {
@@ -234,8 +237,9 @@ class ForensicRunner(private val stringResolver: StringResolver) {
                 LogUtils.w(TAG, "Skipping ${module.javaClass.simpleName} for $path: $e")
                 // Path first: the CLI renders only the value, not the grouped file key.
                 failures.add(Detection(DetectionType.ARTIFACT_PARSE_FAILED, path, module.javaClass.simpleName))
-                continue
             }
+            // Merged even on failure: records are checked as they stream, so the part that did
+            // parse has already produced detections worth keeping.
             merged = mergeInto(merged, module)
         }
 
@@ -263,8 +267,7 @@ class ForensicRunner(private val stringResolver: StringResolver) {
         if (existing == null) {
             return parsed
         }
-        existing.results.addAll(parsed.results)
-        existing.detected.addAll(parsed.detected)
+        existing.merge(parsed)
         return existing
     }
 

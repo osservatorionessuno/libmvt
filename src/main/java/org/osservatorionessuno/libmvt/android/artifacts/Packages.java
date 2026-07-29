@@ -47,7 +47,6 @@ public class Packages extends AndroidArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
-        results.clear();
         try {
             parseByExtension(artifactInput, this::parseProtobuf, this::parseJson);
         } catch (IOException e) {
@@ -204,11 +203,6 @@ public class Packages extends AndroidArtifact {
         } catch (JSONException ex) {
             // TODO: Something went wrong
         }
-    }
-
-    /** Records are checked by {@link #checkRecord} as they stream in; none are retained. */
-    @Override
-    public void checkIndicators() {
     }
 
     @Override

@@ -31,7 +31,6 @@ public class Mounts extends AndroidArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
-        results.clear();
         try {
             parseByExtension(artifactInput, this::parseProtobuf, this::parseJson);
         } catch (IOException e) {
@@ -44,7 +43,7 @@ public class Mounts extends AndroidArtifact {
     private void parseProtobuf(InputStream input) throws IOException {
         ProtobufRecords.forEachDelimited(input, record -> {
             Map<String, Object> mount = parseMountEntry(ProtobufRecords.readStringRecord(record));
-            if (mount != null) results.add(mount);
+            if (mount != null) emit(mount);
         });
     }
 
@@ -65,7 +64,7 @@ public class Mounts extends AndroidArtifact {
 
                 Map<String, Object> mountEntry = parseMountEntry(entry);
                 if (mountEntry != null) {
-                    results.add(mountEntry);
+                    emit(mountEntry);
                 }
             }
         } catch (Exception ex) {
@@ -143,65 +142,57 @@ public class Mounts extends AndroidArtifact {
     }
 
     @Override
-    public void checkIndicators() {
-        List<Map<String, Object>> systemRwMounts = new ArrayList<>();
-        List<Map<String, Object>> suspiciousMounts = new ArrayList<>();
-
-        for (Object obj : results) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> mount = (Map<String, Object>) obj;
-            String mountPoint = (String) mount.get("mount_point");
-            @SuppressWarnings("unchecked")
-            List<String> options = (List<String>) mount.get("options_list");
-
-            // Check for system partitions mounted as read-write
-            if (Boolean.TRUE.equals(mount.get("is_system_partition")) && Boolean.TRUE.equals(mount.get("is_read_write"))) {
-                systemRwMounts.add(mount);
-                detected.add(new Detection(DetectionType.MOUNTS_SYSTEM, mountPoint));
-            }
-
-            // Check for other suspicious mount options
-            List<String> suspiciousOpts = new ArrayList<>();
-            for (String opt : options) {
-                if (SUSPICIOUS_OPTIONS.contains(opt)) {
-                    suspiciousOpts.add(opt);
-                }
-            }
-            if (!suspiciousOpts.isEmpty() && Boolean.TRUE.equals(mount.get("is_system_partition"))) {
-                // ALLOWLIST_NOATIME handling: skip allowed case
-                String mountOptions = (String) mount.get("mount_options");
-                if (mountOptions != null && mountOptions.contains("noatime")
-                    && ALLOWLIST_NOATIME.contains((String) mount.get("mount_point"))) {
-                    continue;
-                }
-                suspiciousMounts.add(mount);
-                detected.add(new Detection(DetectionType.MOUNTS_SUSPICIOUS,
-                    mountPoint, String.join(", ", suspiciousOpts)));
-            }
-
-            // Log interesting mount information (just log - map to LOG detection)
-            if ("/data".equals(mountPoint) || mountPoint.startsWith("/sdcard")) {
-                detected.add(new Detection(DetectionType.MOUNTS_DATA,
-                    mountPoint,
-                    String.valueOf(mount.get("filesystem_type")),
-                    String.valueOf(mount.get("mount_options"))));
-            }
-        }
+    protected void checkRecord(Object record) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> mount = (Map<String, Object>) record;
+        checkMountOptions(mount);
 
         // Check indicators if available
         if (indicators == null) return;
 
-        for (Object obj : results) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> mount = (Map<String, Object>) obj;
+        // Check if any mount points match indicators
+        String mp = (String) mount.get("mount_point");
+        detected.addAll(indicators.matchString(mp, IndicatorType.FILE_PATH));
 
-            // Check if any mount points match indicators
-            String mp = (String) mount.get("mount_point");
-            detected.addAll(indicators.matchString(mp, IndicatorType.FILE_PATH));
+        // Check device paths for indicators
+        String dev = (String) mount.get("device");
+        detected.addAll(indicators.matchString(dev, IndicatorType.FILE_PATH));
+    }
 
-            // Check device paths for indicators
-            String dev = (String) mount.get("device");
-            detected.addAll(indicators.matchString(dev, IndicatorType.FILE_PATH));
+    private void checkMountOptions(Map<String, Object> mount) {
+        String mountPoint = (String) mount.get("mount_point");
+        @SuppressWarnings("unchecked")
+        List<String> options = (List<String>) mount.get("options_list");
+
+        // Check for system partitions mounted as read-write
+        if (Boolean.TRUE.equals(mount.get("is_system_partition")) && Boolean.TRUE.equals(mount.get("is_read_write"))) {
+            detected.add(new Detection(DetectionType.MOUNTS_SYSTEM, mountPoint));
+        }
+
+        // Check for other suspicious mount options
+        List<String> suspiciousOpts = new ArrayList<>();
+        for (String opt : options) {
+            if (SUSPICIOUS_OPTIONS.contains(opt)) {
+                suspiciousOpts.add(opt);
+            }
+        }
+        if (!suspiciousOpts.isEmpty() && Boolean.TRUE.equals(mount.get("is_system_partition"))) {
+            // ALLOWLIST_NOATIME handling: skip allowed case
+            String mountOptions = (String) mount.get("mount_options");
+            if (mountOptions != null && mountOptions.contains("noatime")
+                && ALLOWLIST_NOATIME.contains(mountPoint)) {
+                return;
+            }
+            detected.add(new Detection(DetectionType.MOUNTS_SUSPICIOUS,
+                mountPoint, String.join(", ", suspiciousOpts)));
+        }
+
+        // Log interesting mount information (just log - map to LOG detection)
+        if ("/data".equals(mountPoint) || mountPoint.startsWith("/sdcard")) {
+            detected.add(new Detection(DetectionType.MOUNTS_DATA,
+                mountPoint,
+                String.valueOf(mount.get("filesystem_type")),
+                String.valueOf(mount.get("mount_options"))));
         }
     }
 }

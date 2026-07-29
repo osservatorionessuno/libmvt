@@ -14,7 +14,6 @@ class ANR : AndroidArtifact() {
     override fun paths(): List<String> = listOf("**/anr_*")
 
     override fun parse(artifactInput: AbstractInput) {
-        results.clear()
         LogUtils.d("ANR", "Parsing ANR file: ${artifactInput.path}")
 
         var subject: String? = null
@@ -24,7 +23,7 @@ class ANR : AndroidArtifact() {
             val rec = current ?: return
             if (rec.isEmpty()) return
             subject?.let { rec["subject"] = it }
-            results.add(rec)
+            emit(rec)
             current = null
         }
 
@@ -52,28 +51,26 @@ class ANR : AndroidArtifact() {
         flushCurrent()
     }
 
-    override fun checkIndicators() {
+    override fun checkRecord(record: Any) {
         if (indicators == null) return
 
-        for (obj in results) {
-            @Suppress("UNCHECKED_CAST")
-            val map = obj as? Map<String, Any?> ?: continue
+        @Suppress("UNCHECKED_CAST")
+        val map = record as? Map<String, Any?> ?: return
 
-            val pkg = map["package_name"] as? String
-            if (!pkg.isNullOrEmpty()) {
-                detected.addAll(indicators!!.matchString(pkg, IndicatorType.APP_ID))
-            }
-
-            val cmdLineObj = map["command_line"]
-            if (cmdLineObj is List<*> && cmdLineObj.isNotEmpty()) {
-                val cmd = cmdLineObj[0]?.toString() ?: ""
-                val slash = cmd.lastIndexOf('/')
-                val name = if (slash >= 0) cmd.substring(slash + 1) else cmd
-                detected.addAll(indicators!!.matchString(name, IndicatorType.PROCESS))
-            }
-
-            detected.add(Detection(DetectionType.ANR, pkg ?: ""))
+        val pkg = map["package_name"] as? String
+        if (!pkg.isNullOrEmpty()) {
+            detected.addAll(indicators!!.matchString(pkg, IndicatorType.APP_ID))
         }
+
+        val cmdLineObj = map["command_line"]
+        if (cmdLineObj is List<*> && cmdLineObj.isNotEmpty()) {
+            val cmd = cmdLineObj[0]?.toString() ?: ""
+            val slash = cmd.lastIndexOf('/')
+            val name = if (slash >= 0) cmd.substring(slash + 1) else cmd
+            detected.addAll(indicators!!.matchString(name, IndicatorType.PROCESS))
+        }
+
+        detected.add(Detection(DetectionType.ANR, pkg ?: ""))
     }
 
     private fun normalizeTimestamp(raw: String): String {

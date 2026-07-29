@@ -19,7 +19,6 @@ class TombstoneCrashes : AndroidArtifact() {
     override fun paths(): List<String> = listOf("**/tombstone*")
 
     override fun parse(artifactInput: AbstractInput) {
-        results.clear()
         if (artifactInput.path.endsWith(".pb")) {
             parseProtobuf(artifactInput)
         } else {
@@ -90,14 +89,14 @@ class TombstoneCrashes : AndroidArtifact() {
         if (referencedFiles.isNotEmpty()) {
             rec["referenced_files"] = referencedFiles
         }
-        if (rec.isNotEmpty()) results.add(rec)
+        if (rec.isNotEmpty()) emit(rec)
     }
 
     fun parseProtobuf(artifactInput: AbstractInput) {
         try {
             val pb = TombstoneProtobufParser.parse(artifactInput.inputStream.readBytes())
             val rec = protobufToRecord(pb)
-            if (rec.isNotEmpty()) results.add(rec)
+            if (rec.isNotEmpty()) emit(rec)
         } catch (_: Exception) {
             // Malformed protobuf or unsupported schema revision.
         }
@@ -126,29 +125,27 @@ class TombstoneCrashes : AndroidArtifact() {
         return rec
     }
 
-    override fun checkIndicators() {
+    override fun checkRecord(record: Any) {
         if (indicators == null) return
 
-        for (obj in results) {
-            @Suppress("UNCHECKED_CAST")
-            val map = obj as? Map<String, Any?> ?: continue
-            matchProcessIndicators(map)
+        @Suppress("UNCHECKED_CAST")
+        val map = record as? Map<String, Any?> ?: return
+        matchProcessIndicators(map)
 
-            val uid = when (val u = map["uid"]) {
-                is Number -> u.toInt()
-                is String -> u.toIntOrNull()
-                else -> null
-            }
-            if (uid != null && (uid == 0 || uid == 1000 || uid == 2000)) {
-                detected.add(
-                    Detection(
-                        DetectionType.TOMBSTONE_CRASHES_UID,
-                        crashLabel(map),
-                        uid.toString(),
-                        (map["timestamp"] as? String).orEmpty(),
-                    ),
-                )
-            }
+        val uid = when (val u = map["uid"]) {
+            is Number -> u.toInt()
+            is String -> u.toIntOrNull()
+            else -> null
+        }
+        if (uid != null && (uid == 0 || uid == 1000 || uid == 2000)) {
+            detected.add(
+                Detection(
+                    DetectionType.TOMBSTONE_CRASHES_UID,
+                    crashLabel(map),
+                    uid.toString(),
+                    (map["timestamp"] as? String).orEmpty(),
+                ),
+            )
         }
     }
 

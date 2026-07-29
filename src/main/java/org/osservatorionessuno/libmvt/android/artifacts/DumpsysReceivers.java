@@ -13,7 +13,6 @@ public class DumpsysReceivers extends DumpsysArtifact {
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
-        results.clear();
         boolean[] inTable = { false };
         boolean[] inNonData = { false };
         boolean[] done = { false };
@@ -50,41 +49,36 @@ public class DumpsysReceivers extends DumpsysArtifact {
             rec.put("intent", currentIntent[0]);
             rec.put("package_name", pkg);
             rec.put("receiver", receiver);
-            results.add(rec);
+            emit(rec);
         });
     }
 
     @Override
-    public void checkIndicators() {
-        if (results.isEmpty()) return;
+    protected void checkRecord(Object record) {
+        @SuppressWarnings("unchecked")
+        Map<String, String> map = (Map<String, String>) record;
 
-        for (Object obj : results) {
-            @SuppressWarnings("unchecked")
-            Map<String, String> map = (Map<String, String>) obj;
-
-            String intent = map.get("intent");
-            String receiver = map.get("receiver");
-            switch (Objects.requireNonNull(intent)) {
-                case "android.provider.Telephony.NEW_OUTGOING_SMS":
-                    detected.add(new Detection(DetectionType.DUMPSYS_RECEIVERS_OUTGOING_SMS, receiver));
-                    break;
-                case "android.provider.Telephony.SMS_RECEIVED":
-                    detected.add(new Detection(DetectionType.DUMPSYS_RECEIVERS_INCOMING_SMS, receiver));
-                    break;
-                case "android.intent.action.DATA_SMS_RECEIVED":
-                    detected.add(new Detection(DetectionType.DUMPSYS_RECEIVERS_DATA_SMS, receiver));
-                    break;
-                case "android.intent.action.PHONE_STATE":
-                    detected.add(new Detection(DetectionType.DUMPSYS_RECEIVERS_PHONE_STATE, receiver));
-                    break;
-                case "android.intent.action.NEW_OUTGOING_CALL":
-                    detected.add(new Detection(DetectionType.DUMPSYS_RECEIVERS_OUTGOING_CALL, receiver));
-                    break;
-            }
-
-            if (indicators == null) continue;
-            String pkg = map.get("package_name");
-            detected.addAll(indicators.matchString(pkg, IndicatorType.APP_ID));
+        String intent = map.get("intent");
+        String receiver = map.get("receiver");
+        switch (Objects.requireNonNull(intent)) {
+            case "android.provider.Telephony.NEW_OUTGOING_SMS":
+                detected.add(new Detection(DetectionType.DUMPSYS_RECEIVERS_OUTGOING_SMS, receiver));
+                break;
+            case "android.provider.Telephony.SMS_RECEIVED":
+                detected.add(new Detection(DetectionType.DUMPSYS_RECEIVERS_INCOMING_SMS, receiver));
+                break;
+            case "android.intent.action.DATA_SMS_RECEIVED":
+                detected.add(new Detection(DetectionType.DUMPSYS_RECEIVERS_DATA_SMS, receiver));
+                break;
+            case "android.intent.action.PHONE_STATE":
+                detected.add(new Detection(DetectionType.DUMPSYS_RECEIVERS_PHONE_STATE, receiver));
+                break;
+            case "android.intent.action.NEW_OUTGOING_CALL":
+                detected.add(new Detection(DetectionType.DUMPSYS_RECEIVERS_OUTGOING_CALL, receiver));
+                break;
         }
+
+        if (indicators == null) return;
+        detected.addAll(indicators.matchString(map.get("package_name"), IndicatorType.APP_ID));
     }
 }

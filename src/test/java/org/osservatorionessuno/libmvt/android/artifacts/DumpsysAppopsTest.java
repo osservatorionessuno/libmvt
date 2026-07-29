@@ -2,59 +2,57 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
-import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.DetectionType;
 
-import java.io.ByteArrayInputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetection;
 import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.assertDetectionValueContains;
-import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.runIocCheck;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.loadTestIndicators;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.streamArtifact;
+import static org.osservatorionessuno.libmvt.common.DetectionTestUtils.streamRecords;
 
 public class DumpsysAppopsTest {
 
     @Test
     public void testParsing() throws Exception {
-        DumpsysAppops da = new DumpsysAppops();
-        String data = ResourcesUtils.readResourceString("android_data/dumpsys_appops.txt");
-        da.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
-        assertEquals(14, da.getResults().size());
+        List<Object> parsed = streamRecords(
+                DumpsysAppops::new,
+                "dumpsys.txt",
+                ResourcesUtils.readResource("android_data/dumpsys_appops.txt"));
+        assertEquals(14, parsed.size());
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> first = (Map<String, Object>) da.getResults().get(0);
+        Map<String, Object> first = (Map<String, Object>) parsed.get(0);
         assertEquals("com.android.phone", first.get("package_name"));
         assertEquals("0", first.get("uid"));
 
-        @SuppressWarnings("unchecked")
         List<?> perms = (List<?>) first.get("permissions");
         assertEquals(1, perms.size());
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> seventh = (Map<String, Object>) da.getResults().get(7);
+        Map<String, Object> seventh = (Map<String, Object>) parsed.get(7);
         assertEquals("com.android.shell", seventh.get("package_name"));
         assertEquals("2000", seventh.get("uid"));
         perms = (List<?>) seventh.get("permissions");
         assertEquals(4, perms.size());
-        assertEquals("allow", ((Map<String, Object>) perms.get(0)).get("access"));
+        assertEquals("allow", ((Map<?, ?>) perms.get(0)).get("access"));
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> twelfth = (Map<String, Object>) da.getResults().get(12);
+        Map<String, Object> twelfth = (Map<String, Object>) parsed.get(12);
         assertEquals(4, ((List<?>) twelfth.get("permissions")).size());
     }
 
     @Test
     public void testIocCheck() throws Exception {
-        DumpsysAppops da = new DumpsysAppops();
-        String data = ResourcesUtils.readResourceString("android_data/dumpsys_appops.txt");
-        da.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
-
-        runIocCheck(da);
+        DumpsysAppops da = streamArtifact(
+                DumpsysAppops::new,
+                "dumpsys.txt",
+                ResourcesUtils.readResource("android_data/dumpsys_appops.txt"),
+                loadTestIndicators());
 
         assertDetectionValueContains(da.detected, DetectionType.IOC_MATCH, "com.facebook.katana");
         assertDetection(da.detected, DetectionType.APPOPS_RISKY_PERMISSION, AlertLevel.MEDIUM);
