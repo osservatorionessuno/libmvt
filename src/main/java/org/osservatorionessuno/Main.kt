@@ -122,11 +122,6 @@ object Main {
             return
         }
 
-        if (groups.any { parseLevel(it.optString("level")) == AlertLevel.CRITICAL }) {
-            println("WARNING: Critical indicators of compromise were found.")
-            println()
-        }
-
         groups.forEachIndexed { i, group ->
             if (i > 0) println()
             printGroup(group)
@@ -134,6 +129,11 @@ object Main {
 
         println()
         println("Detections count: ${groups.size}")
+
+        if (groups.any { parseLevel(it.optString("level")) == AlertLevel.CRITICAL }) {
+            println()
+            println("WARNING: Critical indicators of compromise were found.")
+        }
     }
 
     private fun printAcquisitionMetadata(acquisition: AcquisitionMetadata?) {

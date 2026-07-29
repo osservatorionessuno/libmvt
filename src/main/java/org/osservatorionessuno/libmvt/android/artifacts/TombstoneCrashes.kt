@@ -10,7 +10,7 @@ import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType
  * Parser for Android tombstone crash files.
  * - Text format: always supported.
  * - Protobuf format: parsed via [TombstoneProtobufParser] (protobuf-javalite wire API).
- * 
+ *
  * BEWARE: "process_name" contains the 15-char truncated thread name (e.g. android.hardwar),
  * and is not the name of the process. Use "binary_path" instead.
  */
@@ -31,26 +31,64 @@ class TombstoneCrashes : AndroidArtifact() {
         val rec = HashMap<String, Any?>()
         // Only the first thread is the crashing thread.
         var sawCrashPidLine = false
+        var inOpenFiles = false
+        var inBacktrace = false
+        val referencedFiles = linkedSetOf<String>()
         forEachLine(artifactInput.inputStream) { raw ->
             val line = raw.trim()
             when {
                 line.startsWith("Timestamp:") -> {
+                    inOpenFiles = false
+                    inBacktrace = false
                     rec["timestamp"] = normalizeTimestamp(line.substring("Timestamp:".length))
                 }
                 line.startsWith("Cmdline:") || line.startsWith("Cmd line:") -> {
+                    inOpenFiles = false
+                    inBacktrace = false
                     val prefix = if (line.startsWith("Cmdline:")) "Cmdline:" else "Cmd line:"
                     val cmd = line.substring(prefix.length).trim()
                     rec["command_line"] = listOf(cmd)
                     extractPackageName(cmd)?.let { rec["package_name"] = it }
                 }
                 line.startsWith("uid:") -> {
+                    inOpenFiles = false
+                    inBacktrace = false
                     line.substring("uid:".length).trim().toIntOrNull()?.let { rec["uid"] = it }
                 }
                 line.startsWith("pid:") && !sawCrashPidLine -> {
+                    inOpenFiles = false
+                    inBacktrace = false
                     parsePidLine(line, rec)
                     sawCrashPidLine = true
                 }
+                line.equals("open files:", ignoreCase = true) -> {
+                    inOpenFiles = true
+                    inBacktrace = false
+                }
+                line.equals("backtrace:", ignoreCase = true) -> {
+                    inBacktrace = true
+                    inOpenFiles = false
+                }
+                inOpenFiles -> {
+                    val path = parseOpenFileLine(line)
+                    if (path != null) {
+                        referencedFiles.add(path)
+                    } else if (line.isNotEmpty()) {
+                        inOpenFiles = false
+                    }
+                }
+                inBacktrace -> {
+                    val path = parseBacktraceFramePath(line)
+                    if (path != null) {
+                        referencedFiles.add(path)
+                    } else if (line.isNotEmpty()) {
+                        inBacktrace = false
+                    }
+                }
             }
+        }
+        if (referencedFiles.isNotEmpty()) {
+            rec["referenced_files"] = referencedFiles
         }
         if (rec.isNotEmpty()) results.add(rec)
     }
@@ -82,6 +120,9 @@ class TombstoneCrashes : AndroidArtifact() {
         if (pb.uid != 0) rec["uid"] = pb.uid
 
         pb.processName()?.let { rec["process_name"] = it }
+        if (pb.referencedFiles.isNotEmpty()) {
+            rec["referenced_files"] = LinkedHashSet(pb.referencedFiles)
+        }
         return rec
     }
 
@@ -145,6 +186,15 @@ class TombstoneCrashes : AndroidArtifact() {
                 indicators!!.matchString(path.substringAfterLast('/'), IndicatorType.PROCESS),
             )
         }
+
+        @Suppress("UNCHECKED_CAST")
+        val referenced = map["referenced_files"] as? Collection<*>
+        if (referenced != null) {
+            for (item in referenced) {
+                val path = item?.toString()?.takeIf { it.isNotEmpty() } ?: continue
+                detected.addAll(indicators!!.matchString(path, IndicatorType.FILE_PATH))
+            }
+        }
     }
 
     private fun normalizeTimestamp(raw: String): String {
@@ -207,6 +257,30 @@ class TombstoneCrashes : AndroidArtifact() {
                 rec["binary_path"] = binaryPath
                 extractPackageName(binaryPath)?.let { rec["package_name"] = it }
             }
+        }
+
+        /** `fd 5: /dev/goodix_fp (unowned)` → `/dev/goodix_fp` (also strips ` (deleted)`). */
+        @JvmStatic
+        fun parseOpenFileLine(line: String): String? {
+            val trimmed = line.trim()
+            if (!trimmed.startsWith("fd ")) return null
+            val colon = trimmed.indexOf(':')
+            if (colon < 0) return null
+            val after = trimmed.substring(colon + 1).trimStart()
+            if (after.isEmpty()) return null
+            // Drop ownership / "(deleted)" suffix after the path.
+            val space = after.indexOf(' ')
+            return if (space < 0) after else after.substring(0, space)
+        }
+
+        /** `#00 pc 0004bd80  /apex/.../libc.so (...)` → `/apex/.../libc.so` */
+        @JvmStatic
+        fun parseBacktraceFramePath(line: String): String? {
+            val parts = line.trim().split(' ').filter { it.isNotEmpty() }
+            // #NN pc <addr> <path> ...
+            if (parts.size < 4) return null
+            if (!parts[0].startsWith("#") || parts[1] != "pc") return null
+            return parts[3]
         }
 
         private fun extractPackageName(cmd: String): String? {

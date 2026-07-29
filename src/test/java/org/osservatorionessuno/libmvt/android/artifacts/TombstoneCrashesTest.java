@@ -53,6 +53,13 @@ public class TombstoneCrashesTest {
         assertEquals(
                 "android.hardware.media.c2@1.2-mediatek",
                 TombstoneCrashes.crashLabel(rec));
+        @SuppressWarnings("unchecked")
+        var referenced = (java.util.Set<String>) rec.get("referenced_files");
+        assertNotNull(referenced);
+        assertTrue(referenced.contains(
+                "/apex/com.android.runtime/lib/bionic/libc.so"));
+        assertTrue(referenced.contains(
+                "/vendor/lib/libcodec2_soft_mtk_apedec.so"));
     }
 
     @Test
@@ -77,6 +84,12 @@ public class TombstoneCrashesTest {
                 "/vendor/bin/hw/android.hardware.media.c2@1.2-mediatek",
                 rec.get("binary_path"));
         assertEquals("2023-04-12 12:32:40.518290", rec.get("timestamp"));
+        @SuppressWarnings("unchecked")
+        var referenced = (java.util.Set<String>) rec.get("referenced_files");
+        assertNotNull(referenced);
+        assertTrue(referenced.contains(
+                "/apex/com.android.runtime/lib/bionic/libc.so"));
+        assertFalse(referenced.isEmpty());
     }
 
     @Test
@@ -303,6 +316,68 @@ public class TombstoneCrashesTest {
         assertDetection(tc.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL);
         assertDetectionValueContains(
                 tc.detected, DetectionType.IOC_MATCH, "evil.hardware.service");
+    }
+
+    @Test
+    public void testParseTextCollectsOpenFilesAndEveryBacktrace() throws Exception {
+        String dump = String.join("\n",
+                "Timestamp: 2026-07-16 13:10:28.933796+0200",
+                "Cmdline: /vendor/bin/hw/android.hardware.biometrics.fingerprint-service.goodix",
+                "pid: 1348, ppid: 1, tid: 1910, name: android.hardwar  >>> /vendor/bin/hw/android.hardware.biometrics.fingerprint-service.goodix <<<",
+                "uid: 1000",
+                "backtrace:",
+                "      #00 pc 0000000000013380  /vendor/lib64/libutils.so (editArrayImpl+48)",
+                "      #01 pc 000000000006d498  /vendor/lib64/libgf_hal.so (hasUpEvt+24)",
+                "",
+                "memory near x0:",
+                "pid: 1348, ppid: 1, tid: 6004, name: SensorPollingWo  >>> /vendor/bin/hw/android.hardware.biometrics.fingerprint-service.goodix <<<",
+                "backtrace:",
+                "      #00 pc 000000000003fe04  /vendor/lib64/fp_utils.so (SensorPollingWorkerThread+36)",
+                "open files:",
+                "    fd 0: /dev/null (unowned)",
+                "    fd 5: /dev/goodix_fp (unowned)",
+                "    fd 3: socket:[27156] (unowned)");
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> rec = parseText(dump);
+        @SuppressWarnings("unchecked")
+        var referenced = (java.util.Set<String>) rec.get("referenced_files");
+        assertNotNull(referenced);
+        assertTrue(referenced.contains("/vendor/lib64/libutils.so"));
+        assertTrue(referenced.contains("/vendor/lib64/libgf_hal.so"));
+        // Second backtrace section must also be collected.
+        assertTrue(referenced.contains("/vendor/lib64/fp_utils.so"));
+        assertTrue(referenced.contains("/dev/null"));
+        assertTrue(referenced.contains("/dev/goodix_fp"));
+        assertTrue(referenced.contains("socket:[27156]"));
+        // First crash header still wins for process identity.
+        assertEquals("android.hardwar", rec.get("process_name"));
+    }
+
+    @Test
+    public void testCheckIndicatorsMatchesReferencedFilePathIoc() throws Exception {
+        String dump = String.join("\n",
+                "Timestamp: 2026-07-16 13:10:28.933796+0200",
+                "Cmdline: /system/bin/toybox",
+                "pid: 1, tid: 1, name: toybox  >>> /system/bin/toybox <<<",
+                "uid: 1046",
+                "backtrace:",
+                "      #00 pc 00001000  /data/local/tmp/evil.so (evil+0)",
+                "open files:",
+                "    fd 3: /data/local/tmp/payload (unowned)");
+
+        TombstoneCrashes tc = new TombstoneCrashes();
+        tc.setStringResolver(new JvmMapStringResolver());
+        tc.parse(new AbstractInput(
+                "tombstone",
+                new ByteArrayInputStream(dump.getBytes(StandardCharsets.UTF_8))) {});
+        tc.setIndicators(indicatorsFromJson(
+                "{ \"indicators\": [ { \"file:path\": [ \"/data/local/tmp/evil.so\", \"/data/local/tmp/payload\" ] } ] }"));
+        tc.checkIndicators();
+
+        assertDetection(tc.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL);
+        assertDetectionValueContains(tc.detected, DetectionType.IOC_MATCH, "/data/local/tmp/evil.so");
+        assertDetectionValueContains(tc.detected, DetectionType.IOC_MATCH, "/data/local/tmp/payload");
     }
 
     private static Map<String, Object> parseText(String dump) throws Exception {
