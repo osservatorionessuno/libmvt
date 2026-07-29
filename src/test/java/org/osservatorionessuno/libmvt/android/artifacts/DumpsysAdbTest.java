@@ -6,6 +6,8 @@ import org.osservatorionessuno.libmvt.common.DetectionType;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -89,6 +91,30 @@ public class DumpsysAdbTest {
         assertEquals(DumpsysAdb.fingerprintOf(blobOnly), DumpsysAdb.fingerprintOf(line));
         assertFalse(DumpsysAdb.fingerprintOf(line).isEmpty());
         assertEquals("", DumpsysAdb.fingerprintOf("!!!invalid!!! user@host"));
+    }
+
+    /**
+     * The keystore XML is device-controlled. A DOCTYPE pointing at a local file must not be
+     * fetched: on a compromised phone that reads the analyst's disk. Parsing has to fail loudly
+     * (the runner turns the throw into ARTIFACT_PARSE_FAILED) rather than resolve the entity.
+     */
+    @Test
+    public void testKeystoreXmlDoesNotResolveExternalEntities() throws Exception {
+        Path dtd = Files.createTempDirectory("mvt-xxe-").resolve("evil.dtd");
+        Files.writeString(dtd, "<!ENTITY exfil \"leaked\">\n", StandardCharsets.UTF_8);
+
+        String xml = "<?xml version=\"1.0\"?>"
+                + "<!DOCTYPE keyStore SYSTEM \"" + dtd.toUri() + "\">"
+                + "<keyStore><adbKey key=\"AAAA\" lastConnection=\"1\"/></keyStore>";
+        byte[] data = ("DUMP OF SERVICE adb:\n  keystore=" + xml + "\n")
+                .getBytes(StandardCharsets.UTF_8);
+
+        DumpsysAdb da = new DumpsysAdb();
+        Exception thrown = assertThrows(Exception.class, () -> da.parse(
+                new org.osservatorionessuno.libmvt.common.AbstractInput(
+                        "dumpsys.txt", new ByteArrayInputStream(data)) {}));
+        assertTrue(thrown.getMessage().toLowerCase().contains("doctype"),
+                "expected the DOCTYPE to be rejected, got: " + thrown.getMessage());
     }
 
     private static String extractUserKeyLine(String dumpsys) {
