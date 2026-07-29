@@ -158,7 +158,7 @@ enum class DetectionType(
     ),
     ANR(
         "anr",
-        AlertLevel.MEDIUM,
+        AlertLevel.LOW,
         "mvt_anr_package_name_title",
         "mvt_anr_package_name_message",
     ),

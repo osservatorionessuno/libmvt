@@ -50,7 +50,7 @@ public class ANRTest {
         runIocCheck(anr);
 
         assertFalse(anr.detected.isEmpty());
-        assertDetection(anr.detected, DetectionType.ANR, AlertLevel.MEDIUM);
+        assertDetection(anr.detected, DetectionType.ANR, AlertLevel.LOW);
         assertDetectionValueContains(anr.detected, DetectionType.ANR, "org.thoughtcrime.securesms");
     }
 }
