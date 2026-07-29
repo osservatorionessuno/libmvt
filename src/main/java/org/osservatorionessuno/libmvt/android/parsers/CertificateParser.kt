@@ -18,6 +18,7 @@ object CertificateParser {
         val algorithm: String,
         val version: Int,
         val serialNumber: String,
+        /** Allowlisted *and* backed by a signature that verified. See [fromX509Certificate]. */
         val trusted: Boolean,
         val checksums: Checksum,
     )
@@ -91,8 +92,20 @@ object CertificateParser {
         return fromX509Certificate(cert)
     }
 
+    /**
+     * Describe [cert].
+     *
+     * [signatureVerified] must be true only when the caller has verified a signature made with
+     * this certificate. Certificates are public: a repackaged APK can ship a vendor certificate
+     * it does not own, so the [Utils.VALID_CERTIFICATES] fingerprint alone proves nothing and
+     * [CertificateInfo.trusted] stays false without it.
+     */
     @JvmStatic
-    fun fromX509Certificate(cert: X509Certificate): CertificateInfo {
+    @JvmOverloads
+    fun fromX509Certificate(
+        cert: X509Certificate,
+        signatureVerified: Boolean = false,
+    ): CertificateInfo {
         val sha1 = certificateFingerprint(cert, "SHA1")
         return CertificateInfo(
             subject = formatPrincipal(cert.subjectX500Principal),
@@ -102,7 +115,7 @@ object CertificateParser {
             algorithm = cert.sigAlgName,
             version = cert.version,
             serialNumber = cert.serialNumber.toString(16),
-            trusted = isTrustedCertificate(cert, sha1),
+            trusted = signatureVerified && isAllowlisted(sha1),
             checksums =
                 Checksum(
                     md5 = certificateFingerprint(cert, "MD5"),
@@ -117,6 +130,5 @@ object CertificateParser {
         return digest.joinToString(separator = "") { b -> "%02x".format(b) }
     }
 
-    private fun isTrustedCertificate(cert: X509Certificate, sha1: String): Boolean =
-        Utils.VALID_CERTIFICATES.contains(sha1)
+    private fun isAllowlisted(sha1: String): Boolean = Utils.VALID_CERTIFICATES.contains(sha1)
 }

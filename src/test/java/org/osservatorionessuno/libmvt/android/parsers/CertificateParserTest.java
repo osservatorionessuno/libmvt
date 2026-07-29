@@ -84,15 +84,20 @@ public class CertificateParserTest {
         String sha1 = untrusted.getChecksums().getSha1();
         Utils.VALID_CERTIFICATES.add(sha1);
         try {
-            CertificateParser.CertificateInfo trusted = CertificateParser.fromX509Certificate(cert);
+            CertificateParser.CertificateInfo trusted =
+                    CertificateParser.fromX509Certificate(cert, true);
             assertTrue(trusted.getTrusted());
             assertEquals(sha1, trusted.getChecksums().getSha1());
+
+            // Allowlisted, but nothing verified a signature made with it: not trusted.
+            assertFalse(CertificateParser.fromX509Certificate(cert, false).getTrusted());
+            assertFalse(CertificateParser.fromX509Certificate(cert).getTrusted());
         } finally {
             Utils.VALID_CERTIFICATES.remove(sha1);
         }
 
         // Allowlist mutation must not leak across tests.
-        assertFalse(CertificateParser.fromX509Certificate(cert).getTrusted());
+        assertFalse(CertificateParser.fromX509Certificate(cert, true).getTrusted());
     }
 
     /**
