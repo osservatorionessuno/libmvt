@@ -38,7 +38,8 @@ object APKParser {
     @JvmStatic
     fun parseAPK(apk: File): APKInfo {
         LogUtils.d("APKParser", "Parsing APK: ${apk.name}")
-        return parseAPKBytes(apk.readBytes())
+        // Signature and entries are both read as a stream: an APK can outgrow the heap.
+        return parseAPKEntries(SignatureParser().parseAPKSignature(apk), apk.inputStream().buffered())
     }
 
     /**
@@ -47,12 +48,18 @@ object APKParser {
     @JvmStatic
     fun parseAPK(input: InputStream): APKInfo {
         LogUtils.d("APKParser", "Parsing APK from stream")
-        return parseAPKBytes(input.readBytes())
+        // apksig needs random access, so this path has to buffer the whole APK.
+        val apkBytes = input.readBytes()
+        return parseAPKEntries(
+            SignatureParser().parseAPKSignature(apkBytes),
+            ByteArrayInputStream(apkBytes),
+        )
     }
 
-    private fun parseAPKBytes(apkBytes: ByteArray): APKInfo {
-        // Get the signature information from the APK
-        val signatureInfo = SignatureParser().parseAPKSignature(apkBytes)
+    private fun parseAPKEntries(
+        signatureInfo: SignatureParser.APKSignatureInfo,
+        apkStream: InputStream,
+    ): APKInfo {
         // A repackaged APK keeps the original signer certificate but breaks its signature, so
         // skipping analysis on the fingerprint alone would hide exactly the tampering we look for.
         val trustedCertificates =
@@ -67,7 +74,7 @@ object APKParser {
         // Get the manifest information from the APK
         val files = mutableListOf<String>()
         var binaryManifest: ByteArray? = null
-        ZipInputStream(ByteArrayInputStream(apkBytes)).use { zip ->
+        ZipInputStream(apkStream).use { zip ->
             var entry = zip.nextEntry
             while (entry != null) {
                 if (!entry.isDirectory) {
