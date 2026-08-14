@@ -30,6 +30,14 @@ enum class DetectionType(
         "mvt_adb_fingerprint_title",
         "mvt_adb_fingerprint_message",
     ),
+
+    /** An authorized adb key belonging to the acquiring host itself (see adb_host_key.pub). */
+    ADB_HOST_FINGERPRINT(
+        "adb_host_fingerprint",
+        AlertLevel.LOG,
+        "mvt_adb_host_fingerprint_title",
+        "mvt_adb_host_fingerprint_message",
+    ),
     APPOPS_RISKY_PERMISSION(
         "appops_risky_permission",
         AlertLevel.MEDIUM,
