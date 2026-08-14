@@ -1,6 +1,7 @@
 package org.osservatorionessuno.libmvt.android
 
 import org.osservatorionessuno.libmvt.android.artifacts.AndroidArtifact
+import org.osservatorionessuno.libmvt.android.artifacts.DumpsysAdb
 import org.osservatorionessuno.libmvt.common.AbstractInput
 import org.osservatorionessuno.libmvt.common.Artifact
 import org.osservatorionessuno.libmvt.common.Detection
@@ -50,11 +51,21 @@ private class SkippedArtifact : AndroidArtifact() {
  */
 class ForensicRunner(private val stringResolver: StringResolver) {
     private var indicators: Indicators? = null
+    private var adbHostKeys: List<String> = emptyList()
 
     /** Assign indicators to use for IOC matching. */
     fun setIndicators(indicators: Indicators?) {
         this.indicators = indicators
         this.indicators?.setStringResolver(stringResolver)
+    }
+
+    /**
+     * Declare the acquiring host's own adb keys (adb_keys lines, e.g. adb_host_key.pub or the
+     * acquisition's `adb_host_public_key`), reported as [DetectionType.ADB_HOST_FINGERPRINT]
+     * instead of unknown-key detections.
+     */
+    fun setAdbHostKeys(keys: Collection<String>) {
+        adbHostKeys = keys.toList()
     }
 
     /**
@@ -262,6 +273,9 @@ class ForensicRunner(private val stringResolver: StringResolver) {
         indicators?.let { ind ->
             ind.setStringResolver(stringResolver)
             artifact.indicators = ind
+        }
+        if (artifact is DumpsysAdb && adbHostKeys.isNotEmpty()) {
+            artifact.setHostKeys(adbHostKeys)
         }
     }
 

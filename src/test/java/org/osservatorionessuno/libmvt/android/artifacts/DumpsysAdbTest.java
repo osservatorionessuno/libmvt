@@ -3,6 +3,7 @@ package org.osservatorionessuno.libmvt.android.artifacts;
 import org.junit.jupiter.api.Test;
 import org.osservatorionessuno.libmvt.ResourcesUtils;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
+import org.osservatorionessuno.libmvt.common.DetectionType;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
@@ -48,5 +49,49 @@ public class DumpsysAdbTest {
         assertEquals("user@laptop", ks.get(0).get("user"));
         assertEquals("F0:0B:27:08:E3:68:7B:FA:4C:79:A2:B4:BF:0E:CF:70", ks.get(0).get("fingerprint"));
         assertEquals("1628501829898", ks.get(0).get("last_connected"));
+    }
+
+    @Test
+    public void testHostKeyDetectedSeparately() throws Exception {
+        DumpsysAdb da = new DumpsysAdb();
+        String data = ResourcesUtils.readResourceString("android_data/dumpsys_adb.txt");
+        String hostKey = extractUserKeyLine(data);
+
+        da.setHostKeys(List.of(hostKey));
+        da.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
+        da.checkIndicators();
+
+        assertEquals(1, da.detected.size());
+        assertEquals(DetectionType.ADB_HOST_FINGERPRINT.getId(), da.detected.get(0).getId());
+    }
+
+    @Test
+    public void testUnknownKeyStillDetected() throws Exception {
+        DumpsysAdb da = new DumpsysAdb();
+        String data = ResourcesUtils.readResourceString("android_data/dumpsys_adb.txt");
+
+        da.setHostKeys(List.of("QAAAAG5vdC10aGUtc2FtZS1rZXk= other@host"));
+        da.parse(new AbstractInput("dumpsys.txt", new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8))) {});
+        da.checkIndicators();
+
+        assertEquals(1, da.detected.size());
+        assertEquals(DetectionType.ADB_FINGERPRINT.getId(), da.detected.get(0).getId());
+    }
+
+    @Test
+    public void testFingerprintOfAcceptsBlobAndFullLine() {
+        String line = "QAAAAG5vdC10aGUtc2FtZS1rZXk= user@host";
+        String blobOnly = "QAAAAG5vdC10aGUtc2FtZS1rZXk=";
+        assertEquals(DumpsysAdb.fingerprintOf(blobOnly), DumpsysAdb.fingerprintOf(line));
+        assertFalse(DumpsysAdb.fingerprintOf(line).isEmpty());
+        assertEquals("", DumpsysAdb.fingerprintOf("!!!invalid!!! user@host"));
+    }
+
+    private static String extractUserKeyLine(String dumpsys) {
+        for (String line : dumpsys.split("\n")) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("user_keys=")) return trimmed.substring(10);
+        }
+        throw new IllegalStateException("no user_keys line in resource");
     }
 }

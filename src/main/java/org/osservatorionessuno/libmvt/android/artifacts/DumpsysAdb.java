@@ -14,6 +14,22 @@ import java.io.IOException;
 /** Parser for dumpsys adb output. */
 public class DumpsysAdb extends DumpsysArtifact {
 
+    private Set<String> hostFingerprints = Collections.emptySet();
+
+    /**
+     * Declare adb keys belonging to the acquiring host (adb_keys lines, e.g. from
+     * adb_host_key.pub). Matching keys are reported as {@link DetectionType#ADB_HOST_FINGERPRINT}
+     * instead of {@link DetectionType#ADB_FINGERPRINT}.
+     */
+    public void setHostKeys(Collection<String> keys) {
+        Set<String> fingerprints = new HashSet<>();
+        for (String key : keys) {
+            String fingerprint = fingerprintOf(key);
+            if (!fingerprint.isEmpty()) fingerprints.add(fingerprint);
+        }
+        hostFingerprints = fingerprints;
+    }
+
     @Override
     public void parse(AbstractInput artifactInput) throws Exception {
         results.clear();
@@ -86,7 +102,7 @@ public class DumpsysAdb extends DumpsysArtifact {
         return list;
     }
 
-    private Map<String, String> calculateKeyInfo(String userKey) throws Exception {
+    private Map<String, String> calculateKeyInfo(String userKey) {
         String keyBase64;
         String user = "";
         int space = userKey.indexOf(' ');
@@ -96,28 +112,35 @@ public class DumpsysAdb extends DumpsysArtifact {
         } else {
             keyBase64 = userKey;
         }
-        String fingerprint = "";
+        Map<String, String> map = new HashMap<>();
+        map.put("user", user);
+        map.put("fingerprint", fingerprintOf(keyBase64));
+        map.put("key", keyBase64);
+        return map;
+    }
+
+    /**
+     * MD5 colon-hex fingerprint of an adb public key, given either the base64 blob or a full
+     * adb_keys line (base64 followed by a comment). Empty string if the key does not decode.
+     */
+    public static String fingerprintOf(String key) {
+        String keyBase64 = key.trim();
+        int space = keyBase64.indexOf(' ');
+        if (space >= 0) keyBase64 = keyBase64.substring(0, space);
         try {
             byte[] raw = Base64.getDecoder().decode(keyBase64);
             // nosemgrep: java.lang.security.audit.crypto.use-of-md5.use-of-md5 - ADB fingerprints are legacy MD5 identifiers, not signatures.
             MessageDigest md = MessageDigest.getInstance("MD5");
             byte[] digest = md.digest(raw);
-            StringBuilder hex = new StringBuilder();
-            for (byte b : digest) hex.append(String.format("%02X", b));
             StringBuilder col = new StringBuilder();
-            for (int i = 0; i < hex.length(); i += 2) {
-                if (i > 0) col.append(':');
-                col.append(hex.substring(i, i + 2));
+            for (byte b : digest) {
+                if (col.length() > 0) col.append(':');
+                col.append(String.format("%02X", b));
             }
-            fingerprint = col.toString();
-        } catch (IllegalArgumentException e) {
-            fingerprint = "";
+            return col.toString();
+        } catch (IllegalArgumentException | java.security.NoSuchAlgorithmException e) {
+            return "";
         }
-        Map<String, String> map = new HashMap<>();
-        map.put("user", user);
-        map.put("fingerprint", fingerprint);
-        map.put("key", keyBase64);
-        return map;
     }
 
     @Override
@@ -131,8 +154,12 @@ public class DumpsysAdb extends DumpsysArtifact {
             List<Map<String, String>> userKeys = (List<Map<String, String>>) map.get("user_keys");
             if (userKeys != null) {
                 for (Map<String, String> userKey : userKeys) {
-                    detected.add(new Detection(DetectionType.ADB_FINGERPRINT,
-                        userKey.get("fingerprint"),
+                    String fingerprint = userKey.get("fingerprint");
+                    DetectionType type = hostFingerprints.contains(fingerprint)
+                        ? DetectionType.ADB_HOST_FINGERPRINT
+                        : DetectionType.ADB_FINGERPRINT;
+                    detected.add(new Detection(type,
+                        fingerprint,
                         userKey.get("user").isEmpty() ? "unknown user" : userKey.get("user")));
                 }
             }
