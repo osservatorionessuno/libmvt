@@ -218,16 +218,25 @@ class ForensicRunner(private val stringResolver: StringResolver) {
         for (index in moduleIndices) {
             val module = ArtifactModuleRegistry.create(index)
             try {
+                var parseError: Throwable? = null
                 try {
                     openStream().use { stream ->
                         // Before parse: modules check each record as it is decoded, then drop it.
                         prepareArtifact(module)
                         module.parse(ArtifactInput(path, stream))
                     }
+                } catch (e: Throwable) {
+                    parseError = e
+                    throw e
                 } finally {
                     // Run even when parse throws: checkIndicators is where a module hands over
                     // detections it had to hold back for ordering, so skipping it loses them.
-                    module.checkIndicators()
+                    try {
+                        module.checkIndicators()
+                    } catch (e: Throwable) {
+                        // The parse failure stays primary; a broken final pass must not mask it.
+                        if (parseError == null) throw e else parseError.addSuppressed(e)
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
