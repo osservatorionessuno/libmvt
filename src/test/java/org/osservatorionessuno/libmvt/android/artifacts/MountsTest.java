@@ -37,11 +37,11 @@ public class MountsTest {
     }
 
     @Test
-    public void testParsingProtobuf() throws Exception {
+    public void testParsingJsonl() throws Exception {
         List<Object> parsed = streamRecords(
                 Mounts::new,
-                "mounts.pb",
-                ResourcesUtils.readResource("androidqf/mounts.pb"));
+                "mounts.jsonl",
+                ResourcesUtils.readResource("androidqf/mounts.jsonl"));
         assertEquals(3, parsed.size());
 
         @SuppressWarnings("unchecked")

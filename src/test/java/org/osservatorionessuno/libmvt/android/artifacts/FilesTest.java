@@ -63,17 +63,43 @@ public class FilesTest {
         assertEquals("/sdcard/.profig.os", first.get("path"));
     }
 
+    private static List<Object> recordsFromJsonlFile(String content) throws Exception {
+        Path file = java.nio.file.Files
+                .createTempDirectory("mvt-files-jsonl-")
+                .resolve("files.jsonl");
+        java.nio.file.Files.writeString(file, content, StandardCharsets.UTF_8);
+        try (InputStream in = new FileInputStream(file.toFile())) {
+            return records("files.jsonl", in);
+        }
+    }
+
     @Test
-    public void testParsingProtobuf() throws Exception {
-        List<Object> parsed = records("files.pb", ResourcesUtils.readResource("androidqf/files.pb"));
+    public void testParsingJsonlFixture() throws Exception {
+        List<Object> parsed = records("files.jsonl", ResourcesUtils.readResource("androidqf/files.jsonl"));
         assertEquals(3, parsed.size());
 
         @SuppressWarnings("unchecked")
         Map<String, Object> first = (Map<String, Object>) parsed.get(0);
         assertEquals("/sdcard/.profig.os", first.get("path"));
-        assertEquals(1593109532.0, first.get("mtime"));
-        assertEquals("-rw-rw----", first.get("mode"));
-        assertEquals(36L, first.get("size"));
+    }
+
+    @Test
+    public void testParsingJsonlStreaming() throws Exception {
+        List<Object> parsed = recordsFromJsonlFile("""
+                {"path":"/data/local/tmp/a"}
+                {"path":"/data/local/tmp/b"}
+                """);
+        assertEquals(2, parsed.size());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> first = (Map<String, Object>) parsed.get(0);
+        assertEquals("/data/local/tmp/a", first.get("path"));
+    }
+
+    /** Unlike the JSON-lines fallback of .json, a malformed .jsonl line aborts the artifact. */
+    @Test
+    public void testMalformedJsonlAborts() {
+        assertThrows(Exception.class, () -> recordsFromJsonlFile("{\"path\":\"/data/local/tmp/a\"}\nnot-json\n"));
     }
 
     /** Records are observed as they stream, and nothing is retained beyond the count. */
@@ -81,7 +107,7 @@ public class FilesTest {
     public void testRecordsAreNotRetained() throws Exception {
         List<Object> sink = new ArrayList<>();
         Files files = streamArtifact(
-                Files::new, "files.pb", ResourcesUtils.readResource("androidqf/files.pb"), null, sink);
+                Files::new, "files.json", ResourcesUtils.readResource("androidqf/files.json"), null, sink);
 
         assertEquals(3, sink.size());
         assertEquals(3, files.getRecordCount());

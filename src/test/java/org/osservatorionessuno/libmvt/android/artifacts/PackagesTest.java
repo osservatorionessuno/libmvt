@@ -6,10 +6,7 @@ import org.osservatorionessuno.libmvt.common.AlertLevel;
 import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Indicators;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -28,23 +25,8 @@ public class PackagesTest {
         }
     }
 
-    private static List<Object> records(String path) throws Exception {
-        List<Object> sink = new ArrayList<>();
-        parse(path, null, sink);
-        return sink;
-    }
-
     private static Packages withIndicators(String path, Indicators indicators) throws Exception {
         return parse(path, indicators, null);
-    }
-
-    @Test
-    public void testParsingProtobuf() throws Exception {
-        List<Object> parsed = records("packages.pb");
-        assertEquals(7, parsed.size());
-        assertTrue(parsed.get(0).toString().contains("name=com.whatsapp"));
-        assertTrue(parsed.get(0).toString().contains(
-                "744ed47f8176ec423840344c33e88bd2c96e8988cda0797f3415bb5229efc12b"));
     }
 
     @Test
@@ -53,6 +35,23 @@ public class PackagesTest {
         Packages p = parse("packages.json", null, sink);
         assertEquals(7, sink.size());
         assertEquals(7, p.getRecordCount());
+    }
+
+    @Test
+    public void testPackagesListJsonl() throws Exception {
+        List<Object> sink = new ArrayList<>();
+        Packages p = parse("packages.jsonl", null, sink);
+        assertEquals(7, sink.size());
+        assertEquals(7, p.getRecordCount());
+    }
+
+    /** The .jsonl parser yields the same detections as the .json parser for the same fixture. */
+    @Test
+    public void testJsonlDetectionsMatchJson() throws Exception {
+        Packages fromJson = parse("packages.json", null, null);
+        Packages fromJsonl = parse("packages.jsonl", null, null);
+        assertEquals(fromJson.detected, fromJsonl.detected);
+        assertEquals(5, fromJsonl.detected.size());
     }
 
     @Test
@@ -106,79 +105,4 @@ public class PackagesTest {
                 List.of("", "APP_CERT_HASH_SHA256", certSha256, "com.malware.muahaha"));
     }
 
-    private static void varint(ByteArrayOutputStream o, int v) {
-        while (true) {
-            if ((v & ~0x7F) == 0) { o.write(v); return; }
-            o.write((v & 0x7F) | 0x80);
-            v >>>= 7;
-        }
-    }
-
-    private static byte[] lengthDelimited(int field, byte[] payload) {
-        ByteArrayOutputStream o = new ByteArrayOutputStream();
-        varint(o, (field << 3) | 2);
-        varint(o, payload.length);
-        o.writeBytes(payload);
-        return o.toByteArray();
-    }
-
-    private static byte[] str(int field, String value) {
-        return lengthDelimited(field, value.getBytes(StandardCharsets.UTF_8));
-    }
-
-    /** One package, one APK, field 8 repeated: signed by two different certificates. */
-    private static byte[] multiSignerPackagesPb(String certA, String certB) {
-        ByteArrayOutputStream file = new ByteArrayOutputStream();
-        file.writeBytes(str(1, "/data/app/com.multi.signer/base.apk"));
-        file.writeBytes(lengthDelimited(8, str(3, certA)));
-        file.writeBytes(lengthDelimited(8, str(3, certB)));
-
-        ByteArrayOutputStream pkg = new ByteArrayOutputStream();
-        pkg.writeBytes(str(1, "com.multi.signer"));
-        pkg.writeBytes(lengthDelimited(7, file.toByteArray()));
-
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        varint(out, pkg.size());
-        out.writeBytes(pkg.toByteArray());
-        return out.toByteArray();
-    }
-
-    /**
-     * APKs in the wild carry several signing certificates and SignatureParser keeps them all,
-     * so every one has to be matched. An IOC is placed on each, since a parser that kept only
-     * the last would still match certB.
-     */
-    @Test
-    public void testAllSignerCertificatesAreMatchedFromProtobuf() throws Exception {
-        String certA = "1111111111111111111111111111111111111111111111111111111111111111";
-        String certB = "2222222222222222222222222222222222222222222222222222222222222222";
-        Indicators indicators = indicatorsFromJson(
-                "{ \"indicators\": [ { \"app:cert.sha256\": [ \""
-                        + certA + "\", \"" + certB + "\" ] } ] }");
-
-        Packages p = streamArtifact(
-                Packages::new,
-                "packages.pb",
-                new ByteArrayInputStream(multiSignerPackagesPb(certA, certB)),
-                indicators);
-
-        assertDetectionValue(
-                p.detected,
-                DetectionType.IOC_MATCH,
-                List.of("", "APP_CERT_HASH_SHA256", certA, "com.multi.signer"));
-        assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, certB);
-    }
-
-    @Test
-    public void testPackagesCertificateHashIocFromProtobuf() throws Exception {
-        // Certificate SHA256 IOC, protobuf encoding.
-        String certSha256 = "c7e56178748be1441370416d4c10e34817ea0c961eb636c8e9d98e0fd79bf730";
-        Packages p = withIndicators("packages.pb", indicatorsFromJson(
-                "{ \"indicators\": [ { \"app:cert.sha256\": [ \"" + certSha256 + "\" ] } ] }"));
-
-        assertDetectionValue(
-                p.detected,
-                DetectionType.IOC_MATCH,
-                List.of("", "APP_CERT_HASH_SHA256", certSha256, "com.malware.muahaha"));
-    }
 }

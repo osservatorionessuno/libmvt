@@ -27,11 +27,11 @@ public class RootBinariesTest {
     }
 
     @Test
-    public void testParsingProtobuf() throws Exception {
+    public void testParsingJsonl() throws Exception {
         List<Object> parsed = streamRecords(
                 RootBinaries::new,
-                "root_binaries.pb",
-                ResourcesUtils.readResource("androidqf/root_binaries.pb"));
+                "root_binaries.jsonl",
+                ResourcesUtils.readResource("androidqf/root_binaries.jsonl"));
         assertEquals(2, parsed.size());
         assertEquals("/system/xbin/su", parsed.get(0));
         assertEquals("/data/local/tmp/unknown_root_file", parsed.get(1));

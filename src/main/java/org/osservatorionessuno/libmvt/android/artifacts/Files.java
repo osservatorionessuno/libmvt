@@ -1,8 +1,6 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
-import com.google.protobuf.CodedInputStream;
 import org.json.JSONException;
-import org.osservatorionessuno.libmvt.android.ProtobufRecords;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.Detection;
 import org.osservatorionessuno.libmvt.common.DetectionType;
@@ -30,13 +28,13 @@ public class Files extends AndroidArtifact {
 
     @Override
     public List<String> paths() {
-        return List.of("files.pb", "files.json");
+        return List.of("files.json", "files.jsonl");
     }
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
         try {
-            parseByExtension(artifactInput, this::parseProtobuf, this::parseJson);
+            parseByExtension(artifactInput, this::parseJson, this::parseJsonl);
         } catch (IOException e) {
             throw e;
         } catch (Exception e) {
@@ -44,28 +42,24 @@ public class Files extends AndroidArtifact {
         }
     }
 
-    private void parseProtobuf(InputStream input) throws IOException {
-        ProtobufRecords.forEachDelimited(input, record -> {
-            CodedInputStream codedInput = CodedInputStream.newInstance(record);
-            emit(parseFileRecord(codedInput));
-        });
-    }
-
-    private Map<String, Object> parseFileRecord(CodedInputStream input) throws IOException {
-        Map<String, Object> map = new HashMap<>();
-        int tag;
-        while ((tag = input.readTag()) != 0) {
-            switch (tag >>> 3) {
-                case 1 -> map.put("path", ProtobufRecords.readString(input));
-                case 2 -> map.put("mtime", input.readDouble());
-                case 3 -> map.put("mode", ProtobufRecords.readString(input));
-                case 4 -> map.put("size", input.readInt64());
-                case 5 -> map.put("user", ProtobufRecords.readString(input));
-                case 6 -> map.put("group", ProtobufRecords.readString(input));
-                default -> input.skipField(tag);
+    private void parseJsonl(InputStream input) throws IOException {
+        // Stream one JSON object per line; a malformed line aborts the artifact.
+        forEachLine(input, line -> {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty()) return;
+            try {
+                JSONObject obj = new JSONObject(trimmed);
+                Map<String, Object> map = new HashMap<>();
+                Iterator<String> keys = obj.keys();
+                while (keys.hasNext()) {
+                    String key = keys.next();
+                    map.put(key, obj.get(key));
+                }
+                emit(map);
+            } catch (JSONException e) {
+                throw new RuntimeException(e);
             }
-        }
-        return map;
+        });
     }
 
     private void parseJson(InputStream input) throws IOException {
