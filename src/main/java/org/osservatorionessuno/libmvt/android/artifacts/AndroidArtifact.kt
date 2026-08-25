@@ -32,11 +32,11 @@ abstract class AndroidArtifact : Artifact() {
     @Throws(Exception::class)
     protected fun parseByExtension(
         artifactInput: org.osservatorionessuno.libmvt.common.AbstractInput,
-        pb: StreamParser,
         json: StreamParser,
+        jsonl: StreamParser,
     ) {
         when {
-            artifactInput.path.endsWith(".pb") -> pb.parse(artifactInput.inputStream)
+            artifactInput.path.endsWith(".jsonl") -> jsonl.parse(artifactInput.inputStream)
             artifactInput.path.endsWith(".json") -> json.parse(artifactInput.inputStream)
             else -> throw IOException("Unsupported file type: ${artifactInput.path}")
         }

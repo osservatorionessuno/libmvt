@@ -1,12 +1,10 @@
 package org.osservatorionessuno.libmvt.android.artifacts;
 
-import com.google.protobuf.CodedInputStream;
 import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.Detection;
 import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 import org.osservatorionessuno.libmvt.common.Utils;
-import org.osservatorionessuno.libmvt.android.ProtobufRecords;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -27,7 +25,7 @@ public class Packages extends AndroidArtifact {
 
     @Override
     public List<String> paths() {
-        return List.of("packages.pb", "packages.json");
+        return List.of("packages.json", "packages.jsonl");
     }
 
     private static class PackageResult {
@@ -48,7 +46,7 @@ public class Packages extends AndroidArtifact {
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
         try {
-            parseByExtension(artifactInput, this::parseProtobuf, this::parseJson);
+            parseByExtension(artifactInput, this::parseJson, this::parseJsonl);
         } catch (IOException e) {
             throw e;
         } catch (Exception e) {
@@ -56,153 +54,91 @@ public class Packages extends AndroidArtifact {
         }
     }
 
-    private void parseProtobuf(InputStream input) throws IOException {
-        ProtobufRecords.forEachDelimited(input, record -> {
-            CodedInputStream codedInput = CodedInputStream.newInstance(record);
-            PackageResult result = parsePackageRecord(codedInput);
-            if (result != null) emit(result);
-        });
-    }
-
-    private PackageResult parsePackageRecord(CodedInputStream input) throws IOException {
-        PackageResult result = new PackageResult();
-        int tag;
-        while ((tag = input.readTag()) != 0) {
-            switch (tag >>> 3) {
-                case 1 -> result.name = ProtobufRecords.readString(input);
-                case 2 -> result.installer = ProtobufRecords.readString(input);
-                case 3 -> result.uid = input.readInt32();
-                case 4 -> result.disabled = input.readBool();
-                case 5 -> result.system = input.readBool();
-                case 6 -> result.thirdParty = input.readBool();
-                case 7 -> result.files.add(parsePackageFileRecord(
-                    CodedInputStream.newInstance(ProtobufRecords.readLengthDelimitedField(input))
-                ));
-                default -> input.skipField(tag);
-            }
-        }
-        return result;
-    }
-
-    private Map<String, Object> parsePackageFileRecord(CodedInputStream input) throws IOException {
-        Map<String, Object> fileMap = new HashMap<>();
-        // An APK can be signed by several certificates, and SignatureParser collects all of
-        // them, so each record appends instead of replacing.
-        List<Map<String, Object>> certificates = new ArrayList<>();
-        fileMap.put("certificates", certificates);
-        int tag;
-        while ((tag = input.readTag()) != 0) {
-            switch (tag >>> 3) {
-                case 1 -> fileMap.put("path", ProtobufRecords.readString(input));
-                case 2 -> fileMap.put("local_name", ProtobufRecords.readString(input));
-                case 3 -> fileMap.put("md5", ProtobufRecords.readString(input));
-                case 4 -> fileMap.put("sha1", ProtobufRecords.readString(input));
-                case 5 -> fileMap.put("sha256", ProtobufRecords.readString(input));
-                case 6 -> fileMap.put("sha512", ProtobufRecords.readString(input));
-                case 7 -> fileMap.put("suspicious", input.readBool());
-                case 8 -> certificates.add(parsePackageCertificateRecord(
-                    CodedInputStream.newInstance(ProtobufRecords.readLengthDelimitedField(input))
-                ));
-                //case 9 -> fileMap.put("infiles", ProtobufRecords.readString(input));
-                default -> input.skipField(tag);
-            }
-        }
-        fileMap.putIfAbsent("path", "");
-        fileMap.putIfAbsent("local_name", "");
-        fileMap.putIfAbsent("md5", "");
-        fileMap.putIfAbsent("sha1", "");
-        fileMap.putIfAbsent("sha256", "");
-        fileMap.putIfAbsent("sha512", "");
-        return fileMap;
-    }
-
-    private Map<String, Object> parsePackageCertificateRecord(CodedInputStream input) throws IOException {
-        Map<String, Object> certificateMap = new HashMap<>();
-        int tag;
-        while ((tag = input.readTag()) != 0) {
-            switch (tag >>> 3) {
-                case 1 -> certificateMap.put("md5", ProtobufRecords.readString(input));
-                case 2 -> certificateMap.put("sha1", ProtobufRecords.readString(input));
-                case 3 -> certificateMap.put("sha256", ProtobufRecords.readString(input));
-                case 4 -> certificateMap.put("valid_from", ProtobufRecords.readString(input));
-                case 5 -> certificateMap.put("valid_to", ProtobufRecords.readString(input));
-                case 6 -> certificateMap.put("issuer", ProtobufRecords.readString(input));
-                case 7 -> certificateMap.put("subject", ProtobufRecords.readString(input));
-                case 8 -> certificateMap.put("signature_algorithm", ProtobufRecords.readString(input));
-                case 9 -> certificateMap.put("serial_number", ProtobufRecords.readString(input));
-                default -> input.skipField(tag);
-            }
-        }
-        return certificateMap;
-    }
-
     private void parseJson(InputStream input) throws IOException {
         try {
             // Try to parse the input as a JSON array
             JSONArray arr = new JSONArray(collectText(input));
             for (int i = 0; i < arr.length(); i++) {
-                JSONObject obj = arr.getJSONObject(i);
-
-                PackageResult result = new PackageResult();
-                result.name = obj.getString("name");
-                result.disabled = obj.getBoolean("disabled");
-                result.installer = obj.getString("installer");
-                result.uid = obj.getInt("uid");
-                result.system = obj.getBoolean("system");
-                result.thirdParty = obj.getBoolean("third_party");
-                
-                JSONArray filesArray = obj.getJSONArray("files");
-                for (int j = 0; j < filesArray.length(); j++) {
-                    JSONObject fileObj = filesArray.getJSONObject(j);
-                    List<Map<String, String>> certs = new ArrayList<>();
-
-                    // AndroidQF format: { "certificate": { "Md5": "...", "Sha1": "...", "Sha256": "..." } }
-                    JSONObject certificateInfo = fileObj.optJSONObject("certificate");
-                    if (certificateInfo != null) {
-                        String md5 = certificateInfo.optString("Md5", null);
-                        String sha1 = certificateInfo.optString("Sha1", null);
-                        String sha256 = certificateInfo.optString("Sha256", null);
-
-                        Map<String, String> certMap = new HashMap<>();
-                        if (md5 != null) certMap.put("md5", md5);
-                        if (sha1 != null) certMap.put("sha1", sha1);
-                        if (sha256 != null) certMap.put("sha256", sha256);
-                        if (!certMap.isEmpty()) certs.add(certMap);
-                    }
-
-                    // Bugbane format: { "certificates": [ { "md5": "...", "sha1": "...", "sha256": "..." }, ... ] }
-                    JSONArray certificates = fileObj.optJSONArray("certificates");
-                    if (certificates != null) {
-                        for (int k = 0; k < certificates.length(); k++) {
-                            JSONObject cert = certificates.optJSONObject(k);
-                            if (cert == null) continue;
-                            Map<String, String> certMap = new HashMap<>();
-                            String md5 = cert.optString("md5", null);
-                            String sha1 = cert.optString("sha1", null);
-                            String sha256 = cert.optString("sha256", null);
-                            if (md5 != null) certMap.put("md5", md5);
-                            if (sha1 != null) certMap.put("sha1", sha1);
-                            if (sha256 != null) certMap.put("sha256", sha256);
-                            if (!certMap.isEmpty()) certs.add(certMap);
-                        }
-                    }
-
-                    Map<String, Object> fileMap = new HashMap<>();
-                    fileMap.put("path", fileObj.optString("path", ""));
-                    fileMap.put("local_name", fileObj.optString("local_name", ""));
-                    fileMap.put("md5", fileObj.optString("md5", ""));
-                    fileMap.put("sha1", fileObj.optString("sha1", ""));
-                    fileMap.put("sha256", fileObj.optString("sha256", ""));
-                    fileMap.put("sha512", fileObj.optString("sha512", ""));
-                    fileMap.put("certificates", certs);
-
-                    result.files.add(fileMap);
-                }
-                emit(result);
+                emit(packageFromJson(arr.getJSONObject(i)));
             }
         } catch (JSONException ex) {
             // TODO: Something went wrong
         }
+    }
+
+    private void parseJsonl(InputStream input) throws IOException {
+        // Stream one package object per line; a malformed line aborts the artifact.
+        forEachLine(input, line -> {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty()) return;
+            try {
+                emit(packageFromJson(new JSONObject(trimmed)));
+            } catch (JSONException e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    private PackageResult packageFromJson(JSONObject obj) throws JSONException {
+        PackageResult result = new PackageResult();
+        // Optional scalars default like the protobuf parser, so a record that omits
+        // a blank field (e.g. installer) or has no files still parses.
+        result.name = obj.optString("name", "");
+        result.disabled = obj.optBoolean("disabled", false);
+        result.installer = obj.optString("installer", "");
+        result.uid = obj.optInt("uid", -1);
+        result.system = obj.optBoolean("system", false);
+        result.thirdParty = obj.optBoolean("third_party", false);
+
+        JSONArray filesArray = obj.optJSONArray("files");
+        if (filesArray == null) return result;
+        for (int j = 0; j < filesArray.length(); j++) {
+            JSONObject fileObj = filesArray.getJSONObject(j);
+            List<Map<String, String>> certs = new ArrayList<>();
+
+            // AndroidQF format: { "certificate": { "Md5": "...", "Sha1": "...", "Sha256": "..." } }
+            JSONObject certificateInfo = fileObj.optJSONObject("certificate");
+            if (certificateInfo != null) {
+                String md5 = certificateInfo.optString("Md5", null);
+                String sha1 = certificateInfo.optString("Sha1", null);
+                String sha256 = certificateInfo.optString("Sha256", null);
+
+                Map<String, String> certMap = new HashMap<>();
+                if (md5 != null) certMap.put("md5", md5);
+                if (sha1 != null) certMap.put("sha1", sha1);
+                if (sha256 != null) certMap.put("sha256", sha256);
+                if (!certMap.isEmpty()) certs.add(certMap);
+            }
+
+            // Bugbane format: { "certificates": [ { "md5": "...", "sha1": "...", "sha256": "..." }, ... ] }
+            JSONArray certificates = fileObj.optJSONArray("certificates");
+            if (certificates != null) {
+                for (int k = 0; k < certificates.length(); k++) {
+                    JSONObject cert = certificates.optJSONObject(k);
+                    if (cert == null) continue;
+                    Map<String, String> certMap = new HashMap<>();
+                    String md5 = cert.optString("md5", null);
+                    String sha1 = cert.optString("sha1", null);
+                    String sha256 = cert.optString("sha256", null);
+                    if (md5 != null) certMap.put("md5", md5);
+                    if (sha1 != null) certMap.put("sha1", sha1);
+                    if (sha256 != null) certMap.put("sha256", sha256);
+                    if (!certMap.isEmpty()) certs.add(certMap);
+                }
+            }
+
+            Map<String, Object> fileMap = new HashMap<>();
+            fileMap.put("path", fileObj.optString("path", ""));
+            fileMap.put("local_name", fileObj.optString("local_name", ""));
+            fileMap.put("md5", fileObj.optString("md5", ""));
+            fileMap.put("sha1", fileObj.optString("sha1", ""));
+            fileMap.put("sha256", fileObj.optString("sha256", ""));
+            fileMap.put("sha512", fileObj.optString("sha512", ""));
+            fileMap.put("certificates", certs);
+
+            result.files.add(fileMap);
+        }
+        return result;
     }
 
     @Override

@@ -95,10 +95,8 @@ public class ForensicRunnerTest {
     @Test
     public void testCorruptArtifactDoesNotAbortScan() throws Exception {
         Path dir = java.nio.file.Files.createTempDirectory("mvt-corrupt-");
-        // Declares a 200-byte record but supplies 2, so the module throws mid-parse.
-        java.nio.file.Files.write(
-                dir.resolve("root_binaries.pb"),
-                new byte[] {(byte) 0xC8, 0x01, 0x0A, 0x02});
+        // A .jsonl line that isn't a JSON string, so the module throws mid-parse.
+        java.nio.file.Files.writeString(dir.resolve("root_binaries.jsonl"), "{\"x\":1}\n");
         java.nio.file.Files.writeString(dir.resolve("selinux.txt"), "Permissive\n");
         java.nio.file.Files.write(
                 dir.resolve("getprop.txt"),
@@ -113,7 +111,7 @@ public class ForensicRunnerTest {
         assertTrue(res.get("getprop.txt").getRecordCount() > 0);
 
         // The corrupt one parses nothing but reports the lost coverage.
-        Artifact skipped = res.get("root_binaries.pb");
+        Artifact skipped = res.get("root_binaries.jsonl");
         assertNotNull(skipped);
         assertEquals(0, skipped.getRecordCount());
         assertDetectionValueContains(

@@ -4,7 +4,6 @@ import org.osservatorionessuno.libmvt.common.AbstractInput;
 import org.osservatorionessuno.libmvt.common.Detection;
 import org.osservatorionessuno.libmvt.common.DetectionType;
 import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
-import org.osservatorionessuno.libmvt.android.ProtobufRecords;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -26,25 +25,18 @@ public class Mounts extends AndroidArtifact {
 
     @Override
     public List<String> paths() {
-        return List.of("mounts.pb", "mounts.json");
+        return List.of("mounts.json", "mounts.jsonl");
     }
 
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
         try {
-            parseByExtension(artifactInput, this::parseProtobuf, this::parseJson);
+            parseByExtension(artifactInput, this::parseJson, this::parseJsonl);
         } catch (IOException e) {
             throw e;
         } catch (Exception e) {
             throw new IOException(e);
         }
-    }
-
-    private void parseProtobuf(InputStream input) throws IOException {
-        ProtobufRecords.forEachDelimited(input, record -> {
-            Map<String, Object> mount = parseMountEntry(ProtobufRecords.readStringRecord(record));
-            if (mount != null) emit(mount);
-        });
     }
 
     private void parseJson(InputStream input) throws IOException {
@@ -73,6 +65,21 @@ public class Mounts extends AndroidArtifact {
             return;
         }
         return;
+    }
+
+    private void parseJsonl(InputStream input) throws IOException {
+        // Stream one JSON string (raw mount line) per line; a malformed line aborts the artifact.
+        forEachLine(input, line -> {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty()) return;
+            try {
+                String entry = (String) new org.json.JSONTokener(trimmed).nextValue();
+                Map<String, Object> mount = parseMountEntry(entry);
+                if (mount != null) emit(mount);
+            } catch (org.json.JSONException | ClassCastException e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 
     private Map<String, Object> parseMountEntry(String entry) {
