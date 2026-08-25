@@ -20,7 +20,7 @@ class GroupedDetectionTest {
             Detection(DetectionType.ROOT_BINARIES, "su", "/system/xbin/su"),
             Detection(DetectionType.ROOT_BINARIES, "su", "/sbin/su"),
             Detection(DetectionType.ROOT_BINARIES, "su", "/system/xbin/su"),
-            Detection(DetectionType.IOC_MATCH, "APP_ID", "evil.apk", "evil.apk"),
+            Detection(DetectionType.IOC_MATCH, "Predator", "APP_ID", "evil.apk"),
         )
 
         val grouped = GroupedDetection.group(detections, "root_binaries.json")
@@ -31,7 +31,7 @@ class GroupedDetectionTest {
         assertEquals(listOf("su", "/system/xbin/su"), grouped[0].detections[0].value)
         assertEquals("root_binaries.json", grouped[0].detections[0].file)
         assertEquals(DetectionType.IOC_MATCH.id, grouped[1].id)
-        assertEquals(listOf("APP_ID", "evil.apk", "evil.apk"), grouped[1].detections.single().value)
+        assertEquals(listOf("Predator", "APP_ID", "evil.apk"), grouped[1].detections.single().value)
     }
 
     @Test

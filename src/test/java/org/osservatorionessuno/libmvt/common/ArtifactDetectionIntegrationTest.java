@@ -71,7 +71,7 @@ public class ArtifactDetectionIntegrationTest {
         assertEquals(1, iocDetections.length());
         JSONObject iocEntry = iocDetections.getJSONObject(0);
         assertEquals("getprop.txt", iocEntry.getString("file"));
-        assertTrue(iocEntry.getJSONArray("value").getString(1).contains("dalvik.vm.appimageformat"));
+        assertTrue(iocEntry.getJSONArray("value").getString(2).contains("dalvik.vm.appimageformat"));
     }
 
     private static JSONObject findGroup(JSONArray array, String id) {

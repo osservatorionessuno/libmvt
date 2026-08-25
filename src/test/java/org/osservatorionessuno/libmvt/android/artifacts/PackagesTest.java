@@ -90,7 +90,7 @@ public class PackagesTest {
         assertDetectionValue(
                 p.detected,
                 DetectionType.IOC_MATCH,
-                List.of("FILE_HASH_SHA256", sha256, "com.malware.muahaha"));
+                List.of("", "FILE_HASH_SHA256", sha256, "com.malware.muahaha"));
     }
 
     @Test
@@ -103,7 +103,7 @@ public class PackagesTest {
         assertDetectionValue(
                 p.detected,
                 DetectionType.IOC_MATCH,
-                List.of("APP_CERT_HASH_SHA256", certSha256, "com.malware.muahaha"));
+                List.of("", "APP_CERT_HASH_SHA256", certSha256, "com.malware.muahaha"));
     }
 
     private static void varint(ByteArrayOutputStream o, int v) {
@@ -165,7 +165,7 @@ public class PackagesTest {
         assertDetectionValue(
                 p.detected,
                 DetectionType.IOC_MATCH,
-                List.of("APP_CERT_HASH_SHA256", certA, "com.multi.signer"));
+                List.of("", "APP_CERT_HASH_SHA256", certA, "com.multi.signer"));
         assertDetectionValueContains(p.detected, DetectionType.IOC_MATCH, certB);
     }
 
@@ -179,6 +179,6 @@ public class PackagesTest {
         assertDetectionValue(
                 p.detected,
                 DetectionType.IOC_MATCH,
-                List.of("APP_CERT_HASH_SHA256", certSha256, "com.malware.muahaha"));
+                List.of("", "APP_CERT_HASH_SHA256", certSha256, "com.malware.muahaha"));
     }
 }

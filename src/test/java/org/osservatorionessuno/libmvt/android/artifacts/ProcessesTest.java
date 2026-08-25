@@ -51,7 +51,6 @@ public class ProcessesTest {
                 new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)),
                 loadTestIndicators());
 
-        // TODO: fix this test
-        // assertFalse(p.detected.isEmpty());
+        assertFalse(p.detected.isEmpty());
     }
 }

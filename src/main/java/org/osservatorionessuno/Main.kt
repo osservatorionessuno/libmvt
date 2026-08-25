@@ -27,38 +27,42 @@ object Main {
         val exitCode = try {
             val cli = CliArgs.parseArgs(args)
 
-            if (cli.updateIndicators) {
-                IndicatorsUpdates().update()
-                kotlin.system.exitProcess(0)
-            }
-
-            val inputPath: File = File(cli.inputPath)
-
-            if (cli.analyzeAPK) {
-                if (inputPath.isFile && inputPath.extension == "apk") {
-                    analyzeAPK(inputPath)
-                } else {
-                    val apkFiles = inputPath.listFiles { file -> file.isFile && file.extension.equals("apk", ignoreCase = true) }
-                    if (apkFiles != null && apkFiles.isNotEmpty()) {
-                        apkFiles.forEach { analyzeAPK(it) }
+            when {
+                cli.updateIndicators -> {
+                    IndicatorsUpdates().update()
+                    0
+                }
+                cli.analyzeAPK -> {
+                    val inputPath = requireInputPath(cli)
+                    if (inputPath.isFile && inputPath.extension == "apk") {
+                        analyzeAPK(inputPath)
                     } else {
-                        println("No APK files found in directory: ${inputPath.absolutePath}")
+                        val apkFiles = inputPath.listFiles { file ->
+                            file.isFile && file.extension.equals("apk", ignoreCase = true)
+                        }
+                        if (apkFiles != null && apkFiles.isNotEmpty()) {
+                            apkFiles.forEach { analyzeAPK(it) }
+                        } else {
+                            println("No APK files found in directory: ${inputPath.absolutePath}")
+                        }
                     }
+                    0
                 }
-                0
-            } else {
-                val acquisition = AcquisitionMetadata.load(inputPath)
-                if (!cli.json) {
-                    printHeader(cli.indicatorsDir)
-                }
-                val detections = runAnalysis(cli)
-                if (cli.json) {
-                    printJsonDetections(detections, acquisition, cli.pretty)
-                } else {
-                    printDetections(detections, acquisition, cli.indicatorsDir)
+                else -> {
+                    val inputPath = requireInputPath(cli)
+                    val acquisition = AcquisitionMetadata.load(inputPath)
+                    if (!cli.json) {
+                        printHeader(cli.indicatorsDir)
+                    }
+                    val detections = runAnalysis(cli)
+                    if (cli.json) {
+                        printJsonDetections(detections, acquisition, cli.pretty)
+                    } else {
+                        printDetections(detections, acquisition, cli.indicatorsDir)
+                    }
+                    0
                 }
             }
-            0
         } catch (e: CliArgs.CliException) {
             LogUtils.e(TAG, e.message)
             1
@@ -75,6 +79,16 @@ object Main {
         }
 
         kotlin.system.exitProcess(exitCode)
+    }
+
+    private fun requireInputPath(cli: CliArgs.CliOptions): File {
+        val path = cli.inputPath
+        if (path.isNullOrBlank()) {
+            throw CliArgs.CliException(
+                "Missing input path. Pass an AndroidQF directory or .zip, or use --update-indicators.",
+            )
+        }
+        return File(path)
     }
 
     private fun runAnalysis(cli: CliArgs.CliOptions): JSONArray {
