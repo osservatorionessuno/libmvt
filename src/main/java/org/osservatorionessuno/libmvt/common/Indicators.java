@@ -14,15 +14,20 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
 /**
  * Loads indicators from .json and .stix2 (JSON) files and matches strings.
  * Files are parsed as a stream (Gson's pull parser), never held in memory.
- * Keyword matching uses Aho-Corasick tries for efficient pattern matching.
+ * Exact-match types (process names, app IDs, hashes, …) are looked up in a map.
+ * Domain/URL/path/name types use Aho-Corasick with whole-word matching.
  */
 public class Indicators {
     private static final String TAG = "Indicators";
@@ -56,7 +61,6 @@ public class Indicators {
     static {
         INDICATOR_CONFIG.put(IndicatorType.DOMAIN, Set.of("domain-name:value", "ipv4-addr:value"));
         INDICATOR_CONFIG.put(IndicatorType.URL, Set.of("url:value"));
-        // TODO: Add support for 16-char truncated process names
         INDICATOR_CONFIG.put(IndicatorType.PROCESS, Set.of("process:name"));
         INDICATOR_CONFIG.put(IndicatorType.EMAIL, Set.of("email-addr:value"));
         INDICATOR_CONFIG.put(IndicatorType.APP_ID, Set.of("app:id"));
@@ -73,16 +77,92 @@ public class Indicators {
         INDICATOR_CONFIG.forEach((type, keys) -> keys.forEach(key -> TYPE_BY_KEY.put(key, type)));
     }
 
+    /**
+     * Types matched by case-insensitive equality (and truncated process names),
+     * never by Aho-Corasick whole-word emits.
+     */
+    private static final Set<IndicatorType> EXACT_MATCH_TYPES = EnumSet.of(
+            IndicatorType.PROCESS,
+            IndicatorType.APP_ID,
+            IndicatorType.PROPERTY,
+            IndicatorType.EMAIL,
+            IndicatorType.FILE_HASH_MD5,
+            IndicatorType.FILE_HASH_SHA1,
+            IndicatorType.FILE_HASH_SHA256,
+            IndicatorType.APP_CERT_HASH_MD5,
+            IndicatorType.APP_CERT_HASH_SHA1,
+            IndicatorType.APP_CERT_HASH_SHA256,
+            IndicatorType.IOS_PROFILE_ID
+    );
+
+    /** Types still scanned with Aho-Corasick {@code ignoreCase().onlyWholeWords()}. */
+    private static final Set<IndicatorType> SUBSTRING_MATCH_TYPES = EnumSet.of(
+            IndicatorType.DOMAIN,
+            IndicatorType.URL,
+            IndicatorType.FILE_PATH,
+            IndicatorType.FILE_NAME
+    );
+
+    /**
+     * Linux {@code TASK_COMM_LEN} is 16 including the NUL, so dumps typically
+     * show 15 characters. Some tools keep 16. Match a longer IOC by prefix
+     * only when the observed name is exactly that truncated length.
+     */
+    private static final int PROCESS_COMM_TRUNCATED_MIN = 15;
+    private static final int PROCESS_COMM_TRUNCATED_MAX = 16;
+
+    /**
+     * Map a STIX pattern key (e.g. {@code domain-name:value}) to its indicator type, or null.
+     * Hash keys are normalised so spec-quoted forms match the lowercase MVT spelling.
+     */
+    public static IndicatorType typeForKey(String key) {
+        if (key == null) return null;
+        return TYPE_BY_KEY.get(normalizeIndicatorKey(key));
+    }
+
+    /**
+     * STIX 2 requires single quotes around hash dictionary keys that contain hyphens
+     * (e.g. {@code file:hashes.'SHA-256'}). MVT historically used the unquoted
+     * lowercase form {@code file:hashes.sha256}. Strip quotes and hyphens from the
+     * algorithm portion so all of these resolve to the same type:
+     * {@code file:hashes.'SHA-256'}, {@code file:hashes.SHA-256},
+     * {@code file:hashes.SHA256}, {@code file:hashes.sha256}.
+     * The same applies to SHA-1/MD5 and {@code app:cert.*} keys.
+     */
+    static String normalizeIndicatorKey(String key) {
+        String trimmed = key.trim();
+        String lower = trimmed.toLowerCase(Locale.ROOT);
+        String prefix;
+        if (lower.startsWith("file:hashes.")) {
+            prefix = "file:hashes.";
+        } else if (lower.startsWith("app:cert.")) {
+            prefix = "app:cert.";
+        } else {
+            return lower;
+        }
+        String algorithm = trimmed.substring(prefix.length())
+                .replace("'", "")
+                .replace("\"", "")
+                .replace("-", "")
+                .trim()
+                .toLowerCase(Locale.ROOT);
+        return prefix + algorithm;
+    }
+
     private final Map<IndicatorType, Trie.TrieBuilder> trieBuilders;
     private final Map<IndicatorType, Trie> tries;
+    private final Map<IndicatorType, Map<String, LinkedHashSet<String>>> malwareByKeyword;
     private StringResolver stringResolver = new JvmMapStringResolver();
 
     public Indicators() {
         this.trieBuilders = new EnumMap<>(IndicatorType.class);
         this.tries = new EnumMap<>(IndicatorType.class);
+        this.malwareByKeyword = new EnumMap<>(IndicatorType.class);
 
-        // Initialize builders for all configured indicator types
         for (IndicatorType type : INDICATOR_CONFIG.keySet()) {
+            malwareByKeyword.put(type, new HashMap<>());
+        }
+        for (IndicatorType type : SUBSTRING_MATCH_TYPES) {
             trieBuilders.put(type, Trie.builder().ignoreCase().onlyWholeWords());
         }
     }
@@ -146,31 +226,91 @@ public class Indicators {
     }
 
     private void readStixObjects(JsonReader reader) throws IOException {
+        StixFileState state = new StixFileState();
         reader.beginArray();
         while (reader.hasNext()) {
             if (reader.peek() != JsonToken.BEGIN_OBJECT) {
                 reader.skipValue();
                 continue;
             }
-            String type = null;
-            String pattern = null;
-            reader.beginObject();
-            while (reader.hasNext()) {
-                String name = reader.nextName();
-                if ("type".equals(name) && reader.peek() == JsonToken.STRING) {
-                    type = reader.nextString();
-                } else if ("pattern".equals(name) && reader.peek() == JsonToken.STRING) {
-                    pattern = reader.nextString();
-                } else {
-                    reader.skipValue();
-                }
-            }
-            reader.endObject();
-            if ("indicator".equals(type)) {
-                addPattern(pattern);
-            }
+            ingestStixObject(readStixObject(reader), state);
         }
         reader.endArray();
+        addResolvedStixKeywords(state);
+    }
+
+    private static StixFields readStixObject(JsonReader reader) throws IOException {
+        StixFields fields = new StixFields();
+        reader.beginObject();
+        while (reader.hasNext()) {
+            String name = reader.nextName();
+            if ("type".equals(name)) {
+                fields.type = nextStringOrSkip(reader);
+            } else if ("id".equals(name)) {
+                fields.id = nextStringOrSkip(reader);
+            } else if ("name".equals(name)) {
+                fields.name = nextStringOrSkip(reader);
+            } else if ("pattern".equals(name)) {
+                fields.pattern = nextStringOrSkip(reader);
+            } else if ("relationship_type".equals(name)) {
+                fields.relationshipType = nextStringOrSkip(reader);
+            } else if ("source_ref".equals(name)) {
+                fields.sourceRef = nextStringOrSkip(reader);
+            } else if ("target_ref".equals(name)) {
+                fields.targetRef = nextStringOrSkip(reader);
+            } else {
+                reader.skipValue();
+            }
+        }
+        reader.endObject();
+        return fields;
+    }
+
+    private static void ingestStixObject(StixFields fields, StixFileState state) {
+        if ("malware".equals(fields.type)) {
+            if (fields.id == null) return;
+            String name = fields.name != null ? fields.name.trim() : "";
+            if (!name.isEmpty()) {
+                state.malwareById.put(fields.id, name);
+            }
+        } else if ("indicator".equals(fields.type)) {
+            ParsedPattern parsed = parsePattern(fields.pattern);
+            if (parsed == null) return;
+            state.indicators.add(new PendingIndicator(fields.id, parsed.type, parsed.value));
+        } else if ("relationship".equals(fields.type)) {
+            if (!"indicates".equals(fields.relationshipType)) return;
+            if (fields.sourceRef == null || fields.targetRef == null) return;
+            state.indicates.add(new String[] { fields.sourceRef, fields.targetRef });
+        }
+    }
+
+    private void addResolvedStixKeywords(StixFileState state) {
+        String fallback = uniqueMalware(state.malwareById);
+        Map<String, String> malwareByIndicator = new HashMap<>();
+        for (String[] rel : state.indicates) {
+            String name = state.malwareById.get(rel[1]);
+            if (name == null) continue;
+            malwareByIndicator.putIfAbsent(rel[0], name);
+        }
+        for (PendingIndicator indicator : state.indicators) {
+            String malware = indicator.id != null ? malwareByIndicator.get(indicator.id) : null;
+            if (malware == null) {
+                malware = fallback;
+            }
+            addKeyword(indicator.type, indicator.value, malware);
+        }
+    }
+
+    private static String uniqueMalware(Map<String, String> malwareById) {
+        String unique = null;
+        for (String name : malwareById.values()) {
+            if (unique == null) {
+                unique = name;
+            } else if (!unique.equals(name)) {
+                return null;
+            }
+        }
+        return unique;
     }
 
     private void readMvtCollections(JsonReader reader) throws IOException {
@@ -182,7 +322,7 @@ public class Indicators {
             }
             reader.beginObject();
             while (reader.hasNext()) {
-                IndicatorType type = TYPE_BY_KEY.get(reader.nextName());
+                IndicatorType type = typeForKey(reader.nextName());
                 if (type == null) {
                     reader.skipValue();
                 } else if (reader.peek() == JsonToken.BEGIN_ARRAY) {
@@ -214,9 +354,26 @@ public class Indicators {
     }
 
     private void addKeyword(IndicatorType type, String value) {
-        Trie.TrieBuilder builder = trieBuilders.get(type);
-        if (builder == null || value == null || value.trim().isEmpty()) return;
-        builder.addKeyword(value.toLowerCase());
+        addKeyword(type, value, null);
+    }
+
+    private void addKeyword(IndicatorType type, String value, String malware) {
+        if (value == null || value.trim().isEmpty()) return;
+        Map<String, LinkedHashSet<String>> byKeyword = malwareByKeyword.get(type);
+        if (byKeyword == null) return;
+        String keyword = value.toLowerCase(Locale.ROOT);
+        LinkedHashSet<String> families = byKeyword.get(keyword);
+        if (families == null) {
+            families = new LinkedHashSet<>();
+            byKeyword.put(keyword, families);
+            Trie.TrieBuilder builder = trieBuilders.get(type);
+            if (builder != null) {
+                builder.addKeyword(keyword);
+            }
+        }
+        if (malware != null && !malware.isEmpty()) {
+            families.add(malware);
+        }
     }
 
     /** Build the Aho-Corasick tries from the builders. */
@@ -227,51 +384,129 @@ public class Indicators {
     }
 
     /** Parse a single STIX pattern like: "[domain-name:value = 'evil.com']" */
-    private void addPattern(String pattern) {
-        if (pattern == null) return;
+    private static ParsedPattern parsePattern(String pattern) {
+        if (pattern == null) return null;
         String p = pattern.trim();
         if (p.startsWith("[") && p.endsWith("]")) {
             p = p.substring(1, p.length() - 1);
         }
         String[] kv = p.split("=", 2);
-        if (kv.length != 2) return;
+        if (kv.length != 2) return null;
 
         String key = kv[0].trim();
         String value = kv[1].trim();
         if (value.startsWith("'") && value.endsWith("'") && value.length() >= 2) {
             value = value.substring(1, value.length() - 1);
         }
-        String vLower = value.toLowerCase();
-
-        // Find which indicator type this STIX pattern key belongs to
-        for (Map.Entry<IndicatorType, Set<String>> entry : INDICATOR_CONFIG.entrySet()) {
-            Set<String> keys = entry.getValue();
-            if (keys.contains(key)) {
-                Trie.TrieBuilder builder = trieBuilders.get(entry.getKey());
-                if (builder != null) {
-                    builder.addKeyword(vLower);
-                }
-                // else: indicator type not supported (no Android Log on JVM)
-                return;
-            }
-        }
+        IndicatorType type = typeForKey(key);
+        if (type == null) return null;
+        return new ParsedPattern(type, value);
     }
 
     /** Match string against loaded indicators. */
     public List<Detection> matchString(String s, IndicatorType type) {
         if (s == null) return Collections.emptyList();
 
+        Map<String, LinkedHashSet<String>> byKeyword = malwareByKeyword.get(type);
+        if (byKeyword == null) return Collections.emptyList();
+
+        if (EXACT_MATCH_TYPES.contains(type)) {
+            return matchExact(s, type, byKeyword);
+        }
+
         Trie trie = tries.get(type);
         if (trie == null) return Collections.emptyList();
 
         List<Detection> detections = new ArrayList<>();
         for (Emit e : trie.parseText(s)) {
-            detections.add(new Detection(DetectionType.IOC_MATCH,
-                type.name(), s));
+            addDetections(detections, byKeyword.get(e.getKeyword()), type, s);
         }
-
         return detections;
     }
 
-    // --------- tiny JSON helper ----------
+    private List<Detection> matchExact(
+            String s, IndicatorType type, Map<String, LinkedHashSet<String>> byKeyword) {
+        String haystackLower = s.toLowerCase(Locale.ROOT);
+        LinkedHashSet<String> families = byKeyword.get(haystackLower);
+        if (families != null) {
+            List<Detection> detections = new ArrayList<>(1);
+            addDetections(detections, families, type, s);
+            return detections;
+        }
+        if (type != IndicatorType.PROCESS) {
+            return Collections.emptyList();
+        }
+        int n = haystackLower.length();
+        if (n < PROCESS_COMM_TRUNCATED_MIN || n > PROCESS_COMM_TRUNCATED_MAX) {
+            return Collections.emptyList();
+        }
+        List<Detection> detections = new ArrayList<>();
+        for (Map.Entry<String, LinkedHashSet<String>> entry : byKeyword.entrySet()) {
+            String keyword = entry.getKey();
+            if (keyword.length() > n && keyword.startsWith(haystackLower)) {
+                addDetections(detections, entry.getValue(), type, s);
+            }
+        }
+        return detections;
+    }
+
+    private static void addDetections(
+            List<Detection> detections,
+            LinkedHashSet<String> families,
+            IndicatorType type,
+            String s) {
+        if (families == null || families.isEmpty()) {
+            detections.add(new Detection(DetectionType.IOC_MATCH, "", type.name(), s));
+            return;
+        }
+        for (String family : families) {
+            detections.add(new Detection(DetectionType.IOC_MATCH, family, type.name(), s));
+        }
+    }
+
+    private static String nextStringOrSkip(JsonReader reader) throws IOException {
+        if (reader.peek() != JsonToken.STRING) {
+            reader.skipValue();
+            return null;
+        }
+        return reader.nextString();
+    }
+
+    private static final class StixFileState {
+        final Map<String, String> malwareById = new LinkedHashMap<>();
+        final List<PendingIndicator> indicators = new ArrayList<>();
+        final List<String[]> indicates = new ArrayList<>();
+    }
+
+    private static final class PendingIndicator {
+        final String id;
+        final IndicatorType type;
+        final String value;
+
+        PendingIndicator(String id, IndicatorType type, String value) {
+            this.id = id;
+            this.type = type;
+            this.value = value;
+        }
+    }
+
+    private static final class StixFields {
+        String type;
+        String id;
+        String name;
+        String pattern;
+        String relationshipType;
+        String sourceRef;
+        String targetRef;
+    }
+
+    private static final class ParsedPattern {
+        final IndicatorType type;
+        final String value;
+
+        ParsedPattern(IndicatorType type, String value) {
+            this.type = type;
+            this.value = value;
+        }
+    }
 }
