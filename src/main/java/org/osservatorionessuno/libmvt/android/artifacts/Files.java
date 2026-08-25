@@ -15,6 +15,7 @@ import java.util.Set;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PushbackInputStream;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -43,62 +44,63 @@ public class Files extends AndroidArtifact {
     }
 
     private void parseJsonl(InputStream input) throws IOException {
-        // Stream one JSON object per line; a malformed line aborts the artifact.
+        streamLines(input, true); // a malformed .jsonl line aborts the artifact
+    }
+
+    private void parseJson(InputStream input) throws IOException {
+        // Peek the first non-whitespace byte: '{' is JSON-lines, which we stream since a real
+        // device's files.json can be hundreds of MB; '[' is a JSON array (androidqf), read whole.
+        PushbackInputStream in = new PushbackInputStream(new BufferedInputStream(input), 1);
+        int b;
+        do { b = in.read(); } while (b == ' ' || b == '\n' || b == '\r' || b == '\t');
+        if (b == -1) return;
+        in.unread(b);
+        if (b == '{') {
+            streamLines(in, false); // JSON-lines .json stays non-fatal on a bad line
+        } else {
+            parseJsonArray(in);
+        }
+    }
+
+    private void streamLines(InputStream input, boolean abortOnError) throws IOException {
         forEachLine(input, line -> {
             String trimmed = line.trim();
             if (trimmed.isEmpty()) return;
             try {
-                JSONObject obj = new JSONObject(trimmed);
-                Map<String, Object> map = new HashMap<>();
-                Iterator<String> keys = obj.keys();
-                while (keys.hasNext()) {
-                    String key = keys.next();
-                    map.put(key, obj.get(key));
-                }
-                emit(map);
+                emitObject(new JSONObject(trimmed));
             } catch (JSONException e) {
-                throw new RuntimeException(e);
+                if (abortOnError) throw new RuntimeException(e);
             }
         });
     }
 
-    private void parseJson(InputStream input) throws IOException {
-        // Read once: collectText closes the stream, so the fallback below reuses the text.
+    private void parseJsonArray(InputStream input) throws IOException {
         String content = collectText(input);
         try {
-            // Try to parse the input as a JSON array
             JSONArray arr = new JSONArray(content);
-            for (int i = 0; i < arr.length(); i++) {
-                JSONObject obj = arr.getJSONObject(i);
-                Map<String, Object> map = new HashMap<>();
-                Iterator<String> keys = obj.keys();
-                while (keys.hasNext()) {
-                    String key = keys.next();
-                    map.put(key, obj.get(key));
-                }
-                emit(map);
-            }
+            for (int i = 0; i < arr.length(); i++) emitObject(arr.getJSONObject(i));
         } catch (JSONException ex) {
-            // Fallback: input may be JSON lines, one object per line
+            // Fallback: a non-array .json may still be JSON lines; skip invalid ones.
             for (String line : content.split("\\R")) {
                 String trimmed = line.trim();
                 if (trimmed.isEmpty()) continue;
                 try {
-                    JSONObject obj = new JSONObject(trimmed);
-                    Map<String, Object> map = new HashMap<>();
-                    Iterator<String> keys = obj.keys();
-                    while (keys.hasNext()) {
-                        String key = keys.next();
-                        map.put(key, obj.get(key));
-                    }
-                    // Again, no conversion of timestamps; assume preprocessed
-                    emit(map);
+                    emitObject(new JSONObject(trimmed));
                 } catch (JSONException e2) {
                     // skip invalid lines
-                    // TODO: maybe report a better error message (?)
                 }
             }
         }
+    }
+
+    private void emitObject(JSONObject obj) {
+        Map<String, Object> map = new HashMap<>();
+        Iterator<String> keys = obj.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            map.put(key, obj.opt(key));
+        }
+        emit(map);
     }
 
     @Override
