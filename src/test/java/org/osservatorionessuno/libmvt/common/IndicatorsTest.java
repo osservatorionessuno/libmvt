@@ -235,6 +235,37 @@ public class IndicatorsTest {
     }
 
     @Test
+    public void urlPatternWithQueryStringIsPreserved() throws Exception {
+        String url = "https://example.com/track?id=1";
+        String stix = "{\"objects\":[{\"type\":\"indicator\",\"pattern\":\"[url:value='" + url + "']\"}]}";
+        Indicators indicators = load("url.stix2", stix);
+
+        List<Detection> detections = indicators.matchString(url, URL);
+        assertEquals(1, detections.size());
+        assertEquals(List.of("", "URL", url), detections.get(0).getValue());
+
+        assertTrue(indicators.matchString("https://example.com/track?id", URL).isEmpty());
+        assertTrue(indicators.matchString("https://example.com/track?id=2", URL).isEmpty());
+    }
+
+    @Test
+    public void filePathPatternWithEscapedQuoteIsPreserved() throws Exception {
+        String path = "C:\\Users\\O'Brien";
+        String pattern = "[file:path='C:\\\\Users\\\\O\\'Brien']";
+        String stix = "{\"objects\":[{\"type\":\"indicator\",\"pattern\":\""
+                + pattern.replace("\\", "\\\\")
+                + "\"}]}";
+        Indicators indicators = load("path.stix2", stix);
+
+        List<Detection> detections = indicators.matchString(path, FILE_PATH);
+        assertEquals(1, detections.size());
+        assertEquals(List.of("", "FILE_PATH", path), detections.get(0).getValue());
+
+        assertTrue(indicators.matchString("C:\\Users\\O", FILE_PATH).isEmpty());
+        assertTrue(indicators.matchString("C:\\Users\\OBrien", FILE_PATH).isEmpty());
+    }
+
+    @Test
     public void appIdIocDoesNotMatchLongerPackage() throws Exception {
         Indicators indicators = load("app.stix2", stixPattern("app:id", "com.foo"));
         assertTrue(indicators.matchString("com.foo.bar", APP_ID).isEmpty());

@@ -1,5 +1,5 @@
 [versions]
-kotlin = "2.0.0"
+kotlin = "2.2.10"
 axmlprinter = "v1.0.0"
 apksig = "8.13.2"
 json = "20240303"
