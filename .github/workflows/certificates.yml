@@ -1,0 +1,71 @@
+name: Certificates
+
+# Keeps Utils.kt VALID_CERTIFICATES healthy:
+# - every PR touching it is validated (format, duplicates)
+# - weekly, tracked F-Droid apps are downloaded and their signer certs checked;
+#   a rotation or a new tracked app opens a PR with the imported entries.
+# Play-distributed apps cannot be fetched in CI: import those locally from a
+# device or an acquisition with `tools/certificates.py import-apk --update`.
+
+on:
+  pull_request:
+    paths:
+      - src/main/java/org/osservatorionessuno/libmvt/common/Utils.kt
+      - tools/certificates.py
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  FDROID_PACKAGES: org.fdroid.fdroid
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate allowlist
+        run: python3 tools/certificates.py validate
+
+  fdroid-watch:
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK (for apksigner)
+        uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            build-tools;36.0.0
+
+      - name: Check tracked F-Droid apps
+        run: python3 tools/certificates.py check-fdroid $FDROID_PACKAGES --update
+
+      - name: Open PR for new certificates
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: import rotated/new signer certificates from F-Droid
+          title: "certificates: F-Droid signer import"
+          body: >
+            Automated import by the Certificates workflow: signer certificates of
+            tracked F-Droid apps that verified but were missing from
+            VALID_CERTIFICATES. Review the entries before merging.
+          branch: bot/fdroid-certificates
+          delete-branch: true
