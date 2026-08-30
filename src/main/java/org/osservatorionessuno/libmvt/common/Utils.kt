@@ -145,6 +145,7 @@ object Utils {
 		"cf3181be0fc4c2e0aca7b777dbbb83da54c9d1be", // Samsung
 		"3d3a8fef5a54c5fbd9d403222750a24260feabeb", // Google Play
 		"38918a453d07199354f8b19af05ec6562ced5788", // Google Android
+		"2169eddb5fbb1fdf241c262681024692c4fc1ecb", // Google Android (rotated, GMS)
 		"a0bc09af527b6397c7a9ef171d6cf76f757becc3", // Google
 		"bb0ffd37010b62873d50c8ad093b3f895c76980b", // Google
 		"9f591218c092ce2ae72aeb71c2ea00a7cbf20030", // Google
@@ -154,6 +155,8 @@ object Utils {
 		"8a3c4b262d721acd49a4bf97d5213199c86fa2b9", // Facebook
 		"7ba7efe97151afeb57103266b1200d85a805d7d6", // Facebook
 		"38a0f7d505fe18fec64fbf343ecaaaf310dbd799", // WhatsApp
+		"8b0debf9516af037c9be2f539584b97fe9781764", // WhatsApp (rotated)
+		"05f2e65928088981b317fc9a6dbfe04b0fa13b4e", // F-Droid
 		"c56fb7d591ba6704df047fd98f535372fea00211", // Instagram
 		"d7268d869be7d87cb797e8f7449bf2451ed8019b", // Netflix
 		"40f3166bb567d3144bca7da466bb948b782270ea", // Twitter
@@ -210,8 +213,7 @@ object Utils {
 		"9d4420349927b14aa8776ad87296054d2a3b43a4", // Google
 		"812a2ace16c28e4caf23f97b902ec8746eca6cf5", // Microsoft
 		"130d48c3280f714759dd2e727f59fe0c8705a1cc", // Malwarebytes
-		"836f4c878866ba3f4f2b70dc5a48f882512adb6f", // Transferwise
-		"836f4c878866ba3f4f2b70dc5a48f882512adb6f", // Pinterest
+		"836f4c878866ba3f4f2b70dc5a48f882512adb6f", // Transferwise / Pinterest
 		"b6a74dbcb894b0f73d8c485c72eb1247a8f027ca", // Strava
 		"6bace2778cc5c105b2a44250bdcfff5c4d5c403a", // Paypal
 		"d8e1ee3ff3a7f6ec46883c898032fe03c23eec20", // Protonmail
@@ -399,7 +401,6 @@ object Utils {
 		"51d8e210264a999a2d0babe4b201eb85582ed050", // Jigsaw
 		"52f308e2848ebf1fea098a565d54a17b1ca9747d", // Revolut
 		"fbc6ddf01efcfc02280217094fdf97a2deb71431", // LEAP
-		"13c9e5900d437089b72324b0260f3b5a0b4e027b", // SoundCloud
 		"8ed1ab9e5b15fa967f30d6a3a9c17be0429ab01d", // Tella
 		"4a4271a5234894d8366b8bf4e2176688d11160fd", // Tidal
 		"609823baed399d9a97138d636550ebe82014cf2e", // Tinder
