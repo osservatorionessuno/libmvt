@@ -260,7 +260,7 @@ public class Indicators {
             case "indicator" -> {
                 ParsedPattern parsed = parsePattern(fields.pattern);
                 if (parsed == null) return;
-                state.indicators.add(new PendingIndicator(fields.id, parsed.type(), parsed.value()));
+                state.indicators.add(new PendingIndicator(fields.id, parsed.type, parsed.value));
             }
             case "relationship" -> {
                 if (!"indicates".equals(fields.relationshipType)) return;
@@ -274,16 +274,16 @@ public class Indicators {
         String fallback = uniqueMalware(state.malwareById);
         Map<String, String> malwareByIndicator = new HashMap<>();
         for (StixIndicates rel : state.indicates) {
-            String name = state.malwareById.get(rel.malwareId());
+            String name = state.malwareById.get(rel.malwareId);
             if (name == null) continue;
-            malwareByIndicator.putIfAbsent(rel.indicatorId(), name);
+            malwareByIndicator.putIfAbsent(rel.indicatorId, name);
         }
         for (PendingIndicator indicator : state.indicators) {
-            String malware = indicator.id() != null ? malwareByIndicator.get(indicator.id()) : null;
+            String malware = indicator.id != null ? malwareByIndicator.get(indicator.id) : null;
             if (malware == null) {
                 malware = fallback;
             }
-            addKeyword(indicator.type(), indicator.value(), malware);
+            addKeyword(indicator.type, indicator.value, malware);
         }
     }
 
@@ -442,11 +442,37 @@ public class Indicators {
         final List<StixIndicates> indicates = new ArrayList<>();
     }
 
-    private record PendingIndicator(String id, IndicatorType type, String value) {}
+    private static final class PendingIndicator {
+        final String id;
+        final IndicatorType type;
+        final String value;
 
-    private record ParsedPattern(IndicatorType type, String value) {}
+        PendingIndicator(String id, IndicatorType type, String value) {
+            this.id = id;
+            this.type = type;
+            this.value = value;
+        }
+    }
 
-    private record StixIndicates(String indicatorId, String malwareId) {}
+    private static final class ParsedPattern {
+        final IndicatorType type;
+        final String value;
+
+        ParsedPattern(IndicatorType type, String value) {
+            this.type = type;
+            this.value = value;
+        }
+    }
+
+    private static final class StixIndicates {
+        final String indicatorId;
+        final String malwareId;
+
+        StixIndicates(String indicatorId, String malwareId) {
+            this.indicatorId = indicatorId;
+            this.malwareId = malwareId;
+        }
+    }
 
     private static final class StixFields {
         String type;

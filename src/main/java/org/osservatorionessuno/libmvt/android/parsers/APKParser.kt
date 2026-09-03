@@ -5,7 +5,6 @@ import org.osservatorionessuno.libmvt.common.logging.LogUtils
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
-import java.util.zip.ZipInputStream
 
 // https://github.com/TheZ3ro/androguard-legacy/blob/master/androguard/core/bytecodes/apk.py
 object APKParser {
@@ -39,7 +38,7 @@ object APKParser {
     fun parseAPK(apk: File): APKInfo {
         LogUtils.d("APKParser", "Parsing APK: ${apk.name}")
         // Signature and entries are both read as a stream: an APK can outgrow the heap.
-        return parseAPKEntries(SignatureParser().parseAPKSignature(apk), apk.inputStream().buffered())
+        return parseAPKEntries(SignatureParser().parseAPKSignature(apk), LenientZipInputStream(apk))
     }
 
     /**
@@ -49,16 +48,16 @@ object APKParser {
     fun parseAPK(input: InputStream): APKInfo {
         LogUtils.d("APKParser", "Parsing APK from stream")
         // apksig needs random access, so this path has to buffer the whole APK.
-        val apkBytes = input.readBytes()
+        val apkBytes: ByteArray = input.readBytes()
         return parseAPKEntries(
             SignatureParser().parseAPKSignature(apkBytes),
-            ByteArrayInputStream(apkBytes),
+            LenientZipInputStream(apkBytes),
         )
     }
 
     private fun parseAPKEntries(
         signatureInfo: SignatureParser.APKSignatureInfo,
-        apkStream: InputStream,
+        zip: LenientZipInputStream,
     ): APKInfo {
         // A repackaged APK keeps the original signer certificate but breaks its signature, so
         // skipping analysis on the fingerprint alone would hide exactly the tampering we look for.
@@ -72,28 +71,14 @@ object APKParser {
             }
 
         // Get the manifest information from the APK
-        val files = mutableListOf<String>()
-        var binaryManifest: ByteArray? = null
-        ZipInputStream(apkStream).use { zip ->
-            var entry = zip.nextEntry
-            while (entry != null) {
-                if (!entry.isDirectory) {
-                    val name = entry.name
-                    if (isTrackedApkEntry(name)) {
-                        files.add(name)
-                    }
-                    if (name == "AndroidManifest.xml") {
-                        binaryManifest = zip.readBytes()
-                    }
-                }
-                zip.closeEntry()
-                entry = zip.nextEntry
-            }
+        val files: List<String>
+        val binaryManifest: ByteArray
+        zip.use {
+            files = zip.fileNames().filter(::isTrackedApkEntry).toList()
+            binaryManifest = zip.readContent("AndroidManifest.xml")
+                ?: throw IllegalArgumentException("AndroidManifest.xml not found in APK")
         }
-
-        val manifestBytes = binaryManifest
-            ?: throw IllegalArgumentException("AndroidManifest.xml not found in APK")
-        val manifestInfo = ManifestParser().parseManifest(ByteArrayInputStream(manifestBytes), false)
+        val manifestInfo = ManifestParser().parseManifest(ByteArrayInputStream(binaryManifest), false)
 
         var suspicious = false
         // If the APK has no trusted certificates, we need to analyze it statically

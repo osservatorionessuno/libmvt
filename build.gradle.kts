@@ -25,6 +25,7 @@ dependencies {
     implementation(libs.snakeyaml)
     implementation(libs.kotlinx.cli)
     implementation(libs.protobuf.javalite)
+    implementation(libs.commons.compress)
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
 }

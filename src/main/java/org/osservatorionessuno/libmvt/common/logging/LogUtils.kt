@@ -40,5 +40,6 @@ object LogUtils {
     @JvmStatic
     fun e(tag: String?, msg: String?, t: Throwable? = null) {
         logger.e(tag, msg, t)
+        t?.printStackTrace(System.err)
     }
 }

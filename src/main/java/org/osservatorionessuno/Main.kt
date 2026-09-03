@@ -64,17 +64,16 @@ object Main {
                 }
             }
         } catch (e: CliArgs.CliException) {
-            LogUtils.e(TAG, e.message)
+            LogUtils.e(TAG, e.message, e)
             1
         } catch (e: NoSuchFileException) {
-            LogUtils.e(TAG, "File not found: " + e.message)
+            LogUtils.e(TAG, "File not found: " + e.message, e)
             1
         } catch (e: IOException) {
-            LogUtils.e(TAG, e.message)
+            LogUtils.e(TAG, e.message, e)
             1
         } catch (e: Exception) {
-            LogUtils.e(TAG, "Unexpected error: ${e.message}")
-            e.printStackTrace(System.err)
+            LogUtils.e(TAG, "Unexpected error: ${e.message}", e)
             1
         }
 

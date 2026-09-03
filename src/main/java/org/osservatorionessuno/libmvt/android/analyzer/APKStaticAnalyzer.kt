@@ -25,6 +25,9 @@ object APKStaticAnalyzer {
         }
         val application = el.getElementsByTagName("application").item(0) as? Element ?: return true
 
+        // We don't do early return so we can log all the risky things found.
+        var highRisk = false
+
         // Check for Accessibility services.
         val services = application.getElementsByTagName("service")
         for (i in 0 until services.length) {
@@ -35,7 +38,7 @@ object APKStaticAnalyzer {
             if (permission.contains("android.permission.BIND_ACCESSIBILITY_SERVICE")) {
                 // App has an Accessibility service.
                 LogUtils.i("APKStaticAnalyzer", "Accessibility service found: $permission")
-                return true
+                highRisk = true
             }
         }
 
@@ -44,7 +47,21 @@ object APKStaticAnalyzer {
         if (isAccessbilityTool == "true") {
             // App is an Accessibility tool.
             LogUtils.i("APKStaticAnalyzer", "Accessibility tool found")
-            return true
+            highRisk = true
+        }
+
+        // Check for Device Admin receivers.
+        val receivers = application.getElementsByTagName("receiver")
+        for (i in 0 until receivers.length) {
+            val receiver = receivers.item(i) as? Element ?: continue
+
+            val permission = receiver.getAttributeNS(ManifestParser.ANDROID_NS, "permission")
+            if (permission.isEmpty()) { continue }
+            if (permission.contains("android.permission.BIND_DEVICE_ADMIN")) {
+                // App is a Device Admin.
+                LogUtils.i("APKStaticAnalyzer", "Device Admin receiver found: $permission")
+                highRisk = true
+            }
         }
         
         // Check for dangerous permissions.
@@ -61,7 +78,7 @@ object APKStaticAnalyzer {
             // If an APK has one of these permissions, we want to analyze it further.
             if (Utils.EXTRA_DANGEROUS_PERMISSIONS.contains(name)) {
                 LogUtils.i("APKStaticAnalyzer", "Extra dangerous permission found: $name")
-                return true
+                highRisk = true
             }
             if (Utils.DANGEROUS_PERMISSIONS.contains(name)) {
                 // Keep debug log, too many hits.
@@ -70,13 +87,13 @@ object APKStaticAnalyzer {
             }
         }
 
-        // Too many dangerous permissions found, return true.
+        // Too many dangerous permissions found.
         if (counter > Utils.DANGEROUS_PERMISSIONS_THRESHOLD) {
             LogUtils.i("APKStaticAnalyzer", "Too many dangerous permissions found: $counter")
-            return true
+            highRisk = true
         }
 
-        // Maybe the APK is not suspicious...
-        return false
+        // Return true if the APK is risky, false if we cannot determine if it is malicious.
+        return highRisk
     }
 }
