@@ -63,7 +63,6 @@ class ManifestParser {
         val writer = java.io.StringWriter()
         val result = javax.xml.transform.stream.StreamResult(writer)
         transformer.transform(source, result)
-        LogUtils.i("ManifestParser", "Document:\n${writer.toString()}")
     }
 
     /**

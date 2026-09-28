@@ -65,12 +65,9 @@ object RemoteAPKParser {
     @JvmStatic
     fun parse(shell: Shell, packageName: String, apkPath: String): APKParser.APKInfo {
         val files = listTrackedEntries(shell, apkPath)
-        LogUtils.i(TAG, "Files listed for $apkPath: $files")
         val certificates = certificatesViaServiceCall(shell, packageName)
         val pm = fetchPmDump(shell, packageName)
-        LogUtils.i(TAG, "Pm dump fetched for $packageName: $pm")
-        LogUtils.i(TAG, "Certificates fetched for $packageName: $certificates")
-
+        
         var packageNameOut = packageName
         var versionCode = pm.versionCode
         var versionName = pm.versionName
@@ -86,7 +83,6 @@ object RemoteAPKParser {
 
                 // can we trust the service call from Android?
                 // for now we will assume cert are not trusted so we will always run the static heuristic.
-                LogUtils.i(TAG, "Manifest parsed for $apkPath: ${info.manifest}")
                 suspicious = APKStaticAnalyzer.analyze(info.manifest)
             }.onFailure { LogUtils.w(TAG, "Manifest parse failed for $apkPath: ${it.message}") }
         } else if (pm.requestedPermissions.isNotEmpty()) {
@@ -255,7 +251,6 @@ object RemoteAPKParser {
             }.getOrDefault(emptyList())
             if (certs.isNotEmpty()) {
                 packageInfoCode = code
-                LogUtils.i(TAG, "Using service call package code $code for signing certs")
                 return code
             }
         }
