@@ -4,21 +4,16 @@ import com.android.apksig.ApkVerifier
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.osservatorionessuno.libmvt.ResourcesUtils
 import org.osservatorionessuno.libmvt.android.analyzer.APKStaticAnalyzer
 import org.osservatorionessuno.libmvt.common.Utils
 import java.io.File
 import java.io.OutputStream
+import java.nio.charset.Charset
 import java.util.zip.ZipFile
 
 class RemoteAPKParserParcelTest {
-    @BeforeEach
-    fun resetServiceCallCache() {
-        RemoteAPKParser.resetCachedServiceCallCode()
-    }
-
     @Test
     fun parcelBytesFromServiceCallOutput_extractsAndroidDebugCert() {
         val output = ResourcesUtils.readResourceString("remote_apk/service_call_get_signatures.txt")
@@ -88,23 +83,23 @@ class RemoteAPKParserParcelTest {
             Archive:  /data/app/example/base.apk
               Length      Date    Time    Name
             ---------  ---------- -----   ----
-                   45  1981-01-01 01:01   assets/with space.bin
                 21280  1981-01-01 01:01   AndroidManifest.xml
                    10  1981-01-01 01:01   assets/foo.bin
                    20  1981-01-01 01:01   res/raw/cfg.xml
                    30  1981-01-01 01:01   res/xml/network.xml
                    40  1981-01-01 01:01   lib/arm64-v8a/libx.so
+                   45  1981-01-01 01:01   assets/with space.bin
                    50  1981-01-01 01:01   classes.dex
             ---------                     -------
                 21430                     6 files
         """.trimIndent()
         assertEquals(
-                "assets/with space.bin",
             listOf(
                 "assets/foo.bin",
                 "res/raw/cfg.xml",
                 "res/xml/network.xml",
                 "lib/arm64-v8a/libx.so",
+                "assets/with space.bin",
             ),
             RemoteAPKParser.parseUnzipList(listing),
         )
@@ -118,17 +113,17 @@ class RemoteAPKParserParcelTest {
                 versionCode=9 minSdk=30 targetSdk=36
                 versionName=0.2.3
                 signatures=PackageSignatures{aaa version:2, signatures:[ad7d173d], past signatures:[]}
+                requested permissions:
+                  android.permission.CAMERA
+                  android.permission.RECORD_AUDIO
+                install permissions:
+                  android.permission.INTERNET: granted=true
             Hidden system packages:
               Package [com.example.app] (def):
                 versionCode=1 minSdk=30 targetSdk=36
                 versionName=0.0.1
                 requested permissions:
                   android.permission.READ_SMS
-                requested permissions:
-                  android.permission.CAMERA
-                  android.permission.RECORD_AUDIO
-                install permissions:
-                  android.permission.INTERNET: granted=true
         """.trimIndent()
         val info = RemoteAPKParser.parsePmDumpOutput(dump)
         assertEquals("0.2.3", info.versionName)
@@ -171,6 +166,96 @@ class RemoteAPKParserParcelTest {
         assertRemoteMatchesLocal("apks/tampered_test.apk")
     }
 
+    @Test
+    fun certificateDiscoveryRecoversAcrossPackagesAndDevices() {
+        val apk = ResourcesUtils.readResourceFile("apks/signed_test.apk")
+        val local = APKParser.parseAPK(apk)
+        val expected = local.certificates.map { it.checksums.sha256 }
+        // Older Android PackageInfo replies contain UTF-16 package names.
+        val shell = LocalApkShell(apk, local.packageName, parcelCharset = Charsets.UTF_16LE)
+        fun certificates(target: RemoteAPKParser.Shell, pkg: String = local.packageName) =
+            RemoteAPKParser.parse(target, pkg, apk.absolutePath).certificates.map { it.checksums.sha256 }
+
+        assertTrue(certificates(shell, "com.example.missing").isEmpty())
+        assertEquals(expected, certificates(shell))
+        assertEquals(expected, certificates(LocalApkShell(apk, local.packageName, serviceCallCode = 4)))
+        shell.serviceCallCode = -1
+        assertTrue(certificates(shell).isEmpty())
+        assertEquals(expected, certificates(LocalApkShell(apk, local.packageName)))
+        shell.serviceCallCode = 3
+        assertEquals(expected, certificates(shell))
+    }
+
+    @Test
+    fun sessionCachesSuccessfulDiscoveryAndRetriesFailures() {
+        val apk = ResourcesUtils.readResourceFile("apks/signed_test.apk")
+        val local = APKParser.parseAPK(apk)
+        val shell = LocalApkShell(apk, local.packageName, serviceCallCode = 4)
+        val session = RemoteAPKParser.Session(shell)
+        fun checkCalls(pkg: String, expectedCodes: List<Int>, signed: Boolean) {
+            shell.serviceCallCodes.clear()
+            val info = session.parse(pkg, apk.absolutePath)
+            assertEquals(if (signed) local.certificates else emptyList<CertificateParser.CertificateInfo>(), info.certificates)
+            assertEquals(expectedCodes, shell.serviceCallCodes)
+        }
+
+        shell.failServiceCalls = true
+        checkCalls(local.packageName, (2..12).toList(), false)
+        shell.failServiceCalls = false
+        checkCalls("com.example.missing", (2..12).toList(), false)
+        checkCalls(local.packageName, listOf(2, 3, 4), true)
+        checkCalls(local.packageName, listOf(4), true)
+        checkCalls("com.example.missing", listOf(4), false)
+        shell.failServiceCalls = true
+        checkCalls(local.packageName, listOf(4), false)
+        shell.failServiceCalls = false
+        checkCalls(local.packageName, listOf(4), true)
+    }
+
+    @Test
+    fun sessionsDoNotShareDiscoveryAcrossTargetsOrAcquisitions() {
+        val apk = ResourcesUtils.readResourceFile("apks/signed_test.apk")
+        val local = APKParser.parseAPK(apk)
+        val first = LocalApkShell(apk, local.packageName, parcelCharset = Charsets.UTF_16LE)
+        val second = LocalApkShell(apk, local.packageName, serviceCallCode = 5)
+        val firstSession = RemoteAPKParser.Session(first)
+        val secondSession = RemoteAPKParser.Session(second)
+        fun checkCalls(session: RemoteAPKParser.Session, shell: LocalApkShell, expectedCodes: List<Int>) {
+            shell.serviceCallCodes.clear()
+            assertEquals(local.certificates, session.parse(local.packageName, apk.absolutePath).certificates)
+            assertEquals(expectedCodes, shell.serviceCallCodes)
+        }
+
+        checkCalls(firstSession, first, listOf(2, 3))
+        checkCalls(secondSession, second, listOf(2, 3, 4, 5))
+        checkCalls(firstSession, first, listOf(3))
+        checkCalls(secondSession, second, listOf(5))
+        checkCalls(RemoteAPKParser.Session(first), first, listOf(2, 3))
+    }
+
+    @Test
+    fun missingOrInvalidManifestFallsBackToPmPermissions() {
+        val apk = ResourcesUtils.readResourceFile("apks/signed_test.apk")
+        val pkg = APKParser.parseAPK(apk).packageName
+        val localShell = LocalApkShell(apk, pkg)
+        for (manifest in listOf(byteArrayOf(), byteArrayOf(3))) {
+            val shell = object : RemoteAPKParser.Shell by localShell {
+                override fun execToStream(command: String, output: OutputStream) = output.write(manifest)
+
+                override fun execForEachLine(command: String, onLine: (String) -> Unit) {
+                    localShell.execForEachLine(command, onLine)
+                    if (command.startsWith("pm dump ")) {
+                        onLine("      android.permission.REQUEST_INSTALL_PACKAGES")
+                    }
+                }
+            }
+            val info = RemoteAPKParser.parse(shell, pkg, apk.absolutePath)
+            assertTrue(info.suspicious)
+            assertEquals("from-pm-dump", info.versionName)
+            assertEquals("0", info.versionCode)
+        }
+    }
+
     private fun assertRemoteMatchesLocal(resource: String) {
         val apk = ResourcesUtils.readResourceFile(resource)
         val local = APKParser.parseAPK(apk)
@@ -202,17 +287,25 @@ class RemoteAPKParserParcelTest {
     private class LocalApkShell(
         private val apk: File,
         private val packageName: String,
+        var serviceCallCode: Int = 3,
+        private val parcelCharset: Charset = Charsets.UTF_8,
     ) : RemoteAPKParser.Shell {
         private val der: ByteArray = signerDer(apk)
+        val serviceCallCodes = mutableListOf<Int>()
+        var failServiceCalls = false
 
         override fun execForEachLine(command: String, onLine: (String) -> Unit) {
+            if (command.startsWith("service call package ")) {
+                serviceCallCodes.add(command.split(' ')[3].toInt())
+                if (failServiceCalls) throw java.io.IOException("ADB connection interrupted")
+            }
             when {
                 command.startsWith("unzip -l ") ->
                     unzipListOutput().lineSequence().forEach(onLine)
                 command.startsWith("pm dump ") ->
                     pmDumpOutput().lineSequence().forEach(onLine)
-                command.startsWith("service call package ") ->
-                    formatServiceCallDump(packageName.toByteArray(Charsets.UTF_8) + der)
+                command.startsWith("service call package $serviceCallCode s16 ${Utils.shQuote(packageName)} ") ->
+                    formatServiceCallDump(packageName.toByteArray(parcelCharset) + der)
                         .lineSequence()
                         .forEach(onLine)
             }
