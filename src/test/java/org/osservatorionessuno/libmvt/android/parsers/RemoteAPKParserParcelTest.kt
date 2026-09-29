@@ -88,6 +88,7 @@ class RemoteAPKParserParcelTest {
             Archive:  /data/app/example/base.apk
               Length      Date    Time    Name
             ---------  ---------- -----   ----
+                   45  1981-01-01 01:01   assets/with space.bin
                 21280  1981-01-01 01:01   AndroidManifest.xml
                    10  1981-01-01 01:01   assets/foo.bin
                    20  1981-01-01 01:01   res/raw/cfg.xml
@@ -98,6 +99,7 @@ class RemoteAPKParserParcelTest {
                 21430                     6 files
         """.trimIndent()
         assertEquals(
+                "assets/with space.bin",
             listOf(
                 "assets/foo.bin",
                 "res/raw/cfg.xml",
