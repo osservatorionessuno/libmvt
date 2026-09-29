@@ -106,18 +106,8 @@ object RemoteAPKParser {
     @JvmStatic
     fun parseUnzipList(output: String): List<String> =
         output.lineSequence()
-            .map { it.trim() }
-            .mapNotNull { line ->
-                if (line.isEmpty() || line.startsWith("Archive:") || line.startsWith("Length") ||
-                    line.startsWith("--------") || line.startsWith("---------")
-                ) {
-                    return@mapNotNull null
-                }
-                val name = line.substringAfterLast(' ').trim()
-                // Trailing summary is "N files".
-                if (name.isEmpty() || name == "Name" || name == "files") return@mapNotNull null
-                name.takeIf { Utils.isTrackedApkEntry(it) }
-            }
+            .mapNotNull { UNZIP_LIST_LINE.matchEntire(it)?.groupValues?.get(1) }
+            .filter(Utils::isTrackedApkEntry)
             .toList()
 
     /**
@@ -149,6 +139,9 @@ object RemoteAPKParser {
             if (seen.add(info.checksums.sha256)) result.add(info)
             // Skip what the factory consumed (junk after a false 0x30 advances by 1 above).
             i += (parcel.size - i) - stream.available()
+    /** `  Length  Date  Time  Name`; name may contain spaces. Header/footer rows don't match. */
+    private val UNZIP_LIST_LINE = Regex("""^\s*\d+\s+\S+\s+\S+\s+(.+?)\s*$""")
+
         }
         return result
     }
