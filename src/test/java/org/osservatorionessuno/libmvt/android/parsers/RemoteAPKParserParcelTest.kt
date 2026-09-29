@@ -118,6 +118,12 @@ class RemoteAPKParserParcelTest {
                 versionCode=9 minSdk=30 targetSdk=36
                 versionName=0.2.3
                 signatures=PackageSignatures{aaa version:2, signatures:[ad7d173d], past signatures:[]}
+            Hidden system packages:
+              Package [com.example.app] (def):
+                versionCode=1 minSdk=30 targetSdk=36
+                versionName=0.0.1
+                requested permissions:
+                  android.permission.READ_SMS
                 requested permissions:
                   android.permission.CAMERA
                   android.permission.RECORD_AUDIO
