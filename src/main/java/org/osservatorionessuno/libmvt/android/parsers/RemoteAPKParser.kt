@@ -181,9 +181,12 @@ object RemoteAPKParser {
         val quoted = Utils.shQuote(apkPath)
         return runCatching {
             val sb = StringBuilder()
+        var packageBlocks = 0
             shell.execForEachLine("unzip -l $quoted") { sb.appendLine(it) }
             parseUnzipList(sb.toString())
         }.onFailure { LogUtils.w(TAG, "unzip -l failed for $apkPath: ${it.message}") }
+            // Only the first block: updated system apps repeat under "Hidden system packages:".
+            if (trimmed.startsWith("Package [") && ++packageBlocks > 1) break
             .getOrDefault(emptyList())
     }
 
