@@ -443,12 +443,6 @@ object Utils {
     @JvmStatic
     fun shQuote(s: String): String = "'" + s.replace("'", "'\\''") + "'"
 
-    @JvmStatic
-    fun sha256Hex(bytes: ByteArray): String {
-        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes)
-        return digest.joinToString("") { "%02x".format(it) }
-    }
-
     /**
      * Decode `service call` hex dump lines (`0xADDR: w0 w1 w2 w3 '....'`) into raw Parcel bytes.
      * Words are little-endian uint32 values as stored in the Parcel.

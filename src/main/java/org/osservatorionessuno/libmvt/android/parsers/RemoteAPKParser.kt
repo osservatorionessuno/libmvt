@@ -144,11 +144,9 @@ object RemoteAPKParser {
                 i++
                 continue
             }
-            val der = cert.encoded
-            if (seen.add(Utils.sha256Hex(der))) {
-                // PM-attested only — never claim apksig verification.
-                result.add(CertificateParser.fromX509Certificate(cert, false))
-            }
+            // PM-attested only — never claim apksig verification.
+            val info = CertificateParser.fromX509Certificate(cert, false)
+            if (seen.add(info.checksums.sha256)) result.add(info)
             // Skip what the factory consumed (junk after a false 0x30 advances by 1 above).
             i += (parcel.size - i) - stream.available()
         }
