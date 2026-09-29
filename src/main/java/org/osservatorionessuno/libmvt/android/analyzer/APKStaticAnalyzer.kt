@@ -65,7 +65,7 @@ object APKStaticAnalyzer {
         }
         
         // Check for dangerous permissions.
-        var counter = 0
+        val permissionNames = ArrayList<String>()
         val usesPermissions = el.getElementsByTagName("uses-permission")
         for (i in 0 until usesPermissions.length) {
             val usesPermission = usesPermissions.item(i) as? Element ?: continue
@@ -73,27 +73,37 @@ object APKStaticAnalyzer {
                 usesPermission.getAttributeNS(ManifestParser.ANDROID_NS, "name").ifEmpty {
                     usesPermission.getAttribute("android:name")
                 }
-            if (name.isEmpty()) { continue }
-
-            // If an APK has one of these permissions, we want to analyze it further.
-            if (Utils.EXTRA_DANGEROUS_PERMISSIONS.contains(name)) {
-                LogUtils.i("APKStaticAnalyzer", "Extra dangerous permission found: $name")
-                highRisk = true
-            }
-            if (Utils.DANGEROUS_PERMISSIONS.contains(name)) {
-                // Keep debug log, too many hits.
-                LogUtils.d("APKStaticAnalyzer", "Dangerous permission found: $name")
-                counter++
-            }
+            if (name.isEmpty()) continue
+            permissionNames.add(name)
         }
-
-        // Too many dangerous permissions found.
-        if (counter > Utils.DANGEROUS_PERMISSIONS_THRESHOLD) {
-            LogUtils.i("APKStaticAnalyzer", "Too many dangerous permissions found: $counter")
+        if (permissionsLookSuspicious(permissionNames)) {
+            LogUtils.i("APKStaticAnalyzer", "Dangerous permissions heuristic matched. APK likely risky.")
             highRisk = true
         }
 
         // Return true if the APK is risky, false if we cannot determine if it is malicious.
         return highRisk
     }
+
+    /**
+     * Permission-only half of [APKStaticAnalyzer]:
+     * true if any [Utils.EXTRA_DANGEROUS_PERMISSIONS] hit or more than [Utils.DANGEROUS_PERMISSIONS_THRESHOLD]
+     * [Utils.DANGEROUS_PERMISSIONS] are requested.
+     */
+    @JvmStatic
+    fun permissionsLookSuspicious(permissions: Iterable<String>): Boolean {
+        var counter = 0
+        for (name in permissions) {
+            if (Utils.EXTRA_DANGEROUS_PERMISSIONS.contains(name)) {
+                LogUtils.i("APKStaticAnalyzer", "Extra dangerous permission found: $name")
+                return true
+            }
+            if (Utils.DANGEROUS_PERMISSIONS.contains(name)) {
+                LogUtils.i("APKStaticAnalyzer", "Dangerous permission found: $name")
+                counter++
+            }
+        }
+        return counter > Utils.DANGEROUS_PERMISSIONS_THRESHOLD
+    }
+
 }

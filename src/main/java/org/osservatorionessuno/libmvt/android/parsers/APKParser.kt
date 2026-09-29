@@ -1,6 +1,7 @@
 package org.osservatorionessuno.libmvt.android.parsers
 
 import org.osservatorionessuno.libmvt.android.analyzer.APKStaticAnalyzer
+import org.osservatorionessuno.libmvt.common.Utils
 import org.osservatorionessuno.libmvt.common.logging.LogUtils
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -74,7 +75,7 @@ object APKParser {
         val files: List<String>
         val binaryManifest: ByteArray
         zip.use {
-            files = zip.fileNames().filter(::isTrackedApkEntry).toList()
+            files = zip.fileNames().filter(Utils::isTrackedApkEntry).toList()
             binaryManifest = zip.readContent("AndroidManifest.xml")
                 ?: throw IllegalArgumentException("AndroidManifest.xml not found in APK")
         }
@@ -99,10 +100,4 @@ object APKParser {
             suspicious = suspicious,
         )
     }
-
-    private fun isTrackedApkEntry(name: String): Boolean =
-        name.startsWith("assets/")
-            || name.startsWith("res/raw/")
-            || name.startsWith("res/xml/")
-            || name.startsWith("lib/")
 }
