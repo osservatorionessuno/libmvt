@@ -49,8 +49,9 @@ object RemoteAPKParser {
      * Parse a single remote APK. Use [Session] to reuse discovery across an acquisition.
      */
     @JvmStatic
-    fun parse(shell: Shell, packageName: String, apkPath: String): APKParser.APKInfo =
-        Session(shell).parse(packageName, apkPath)
+    @JvmOverloads
+    fun parse(shell: Shell, packageName: String, apkPath: String, userId: Int = 0): APKParser.APKInfo =
+        Session(shell).parse(packageName, apkPath, userId)
 
     /**
      * Reuse for all APKs in one acquisition; create a new session when changing targets.
@@ -60,9 +61,25 @@ object RemoteAPKParser {
     class Session(private val shell: Shell) {
         private var packageInfoCode: Int? = null
 
-        fun parse(packageName: String, apkPath: String): APKParser.APKInfo {
+        /**
+         * `IPackageManager.getPackageInfo(String, flags, int userId)` takes `int flags` before API 33
+         * and `long flags` after, so the `service call` argument width must match or `userId` is
+         * misread. Unknown SDK defaults to `i64`, which is right on API 33+ and, for user 0, on older
+         * releases too (the high word doubles as userId=0).
+         */
+        private val flagsType: String by lazy {
+            val sdk = runCatching {
+                var v = 0
+                shell.execForEachLine("getprop ro.build.version.sdk") { v = it.trim().toIntOrNull() ?: v }
+                v
+            }.getOrDefault(0)
+            if (sdk in 1..32) "i32" else "i64"
+        }
+
+        /** [userId] is the Android user the package is installed for (0 = owner, 10+ = profiles). */
+        fun parse(packageName: String, apkPath: String, userId: Int = 0): APKParser.APKInfo {
             val files = listTrackedEntries(shell, apkPath)
-            val certificates = certificatesViaServiceCall(packageName)
+            val certificates = certificatesViaServiceCall(packageName, userId)
             val pm = fetchPmDump(shell, packageName)
 
             val info = extractManifest(shell, apkPath)?.let { bytes ->
@@ -92,12 +109,13 @@ object RemoteAPKParser {
 
         private fun certificatesViaServiceCall(
             packageName: String,
+            userId: Int,
         ): List<CertificateParser.CertificateInfo> {
             val codes = packageInfoCode?.let { it..it } ?: PACKAGE_INFO_CODES
             for (code in codes) {
                 val certs = runCatching {
                     val out = StringBuilder()
-                    shell.execForEachLine(serviceCallCmd(code, packageName)) { out.appendLine(it) }
+                    shell.execForEachLine(serviceCallCmd(code, packageName, userId)) { out.appendLine(it) }
                     certificatesFromParcelBytes(Utils.parcelBytesFromServiceCallOutput(out.toString()))
                 }.getOrDefault(emptyList())
                 if (certs.isNotEmpty()) {
@@ -109,14 +127,9 @@ object RemoteAPKParser {
             return emptyList()
         }
 
+        private fun serviceCallCmd(code: Int, packageName: String, userId: Int): String =
+            "service call package $code s16 ${Utils.shQuote(packageName)} $flagsType $SIGNING_FLAGS i32 $userId"
     }
-
-    /**
-     * `flags` is `int` before API 33 and `long` after. `i32 FLAGS i32 0` works on both: old
-     * reads (flags, userId=0); new reads the two words as one long and userId past the end as 0.
-     */
-    private fun serviceCallCmd(code: Int, packageName: String): String =
-        "service call package $code s16 ${Utils.shQuote(packageName)} i32 $SIGNING_FLAGS i32 0"
 
     /** `unzip -l` name column, filtered like [Utils.isTrackedApkEntry]. */
     @JvmStatic

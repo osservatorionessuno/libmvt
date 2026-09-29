@@ -256,6 +256,18 @@ class RemoteAPKParserParcelTest {
         }
     }
 
+    @Test
+    fun secondaryUserPackagesUseFlagsWidthOfTheDeviceApi() {
+        val apk = ResourcesUtils.readResourceFile("apks/signed_test.apk")
+        val local = APKParser.parseAPK(apk)
+        for (sdk in listOf(30, 34)) {
+            val shell = LocalApkShell(apk, local.packageName, sdk = sdk, userId = 10)
+            val session = RemoteAPKParser.Session(shell)
+            assertTrue(session.parse(local.packageName, apk.absolutePath).certificates.isEmpty(), "sdk=$sdk user 0")
+            assertEquals(local.certificates, session.parse(local.packageName, apk.absolutePath, 10).certificates, "sdk=$sdk user 10")
+        }
+    }
+
     private fun assertRemoteMatchesLocal(resource: String) {
         val apk = ResourcesUtils.readResourceFile(resource)
         val local = APKParser.parseAPK(apk)
@@ -289,6 +301,8 @@ class RemoteAPKParserParcelTest {
         private val packageName: String,
         var serviceCallCode: Int = 3,
         private val parcelCharset: Charset = Charsets.UTF_8,
+        private val sdk: Int = 34,
+        private val userId: Int = 0,
     ) : RemoteAPKParser.Shell {
         private val der: ByteArray = signerDer(apk)
         val serviceCallCodes = mutableListOf<Int>()
@@ -304,7 +318,9 @@ class RemoteAPKParserParcelTest {
                     unzipListOutput().lineSequence().forEach(onLine)
                 command.startsWith("pm dump ") ->
                     pmDumpOutput().lineSequence().forEach(onLine)
-                command.startsWith("service call package $serviceCallCode s16 ${Utils.shQuote(packageName)} ") ->
+                command == "getprop ro.build.version.sdk" -> onLine(sdk.toString())
+                command == "service call package $serviceCallCode s16 ${Utils.shQuote(packageName)} " +
+                    "${if (sdk >= 33) "i64" else "i32"} 134217792 i32 $userId" ->
                     formatServiceCallDump(packageName.toByteArray(parcelCharset) + der)
                         .lineSequence()
                         .forEach(onLine)
