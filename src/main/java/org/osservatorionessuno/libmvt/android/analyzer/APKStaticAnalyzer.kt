@@ -95,13 +95,13 @@ object APKStaticAnalyzer {
         var counter = 0
         for (name in permissions) {
             if (Utils.EXTRA_DANGEROUS_PERMISSIONS.contains(name)) {
-				LogUtils.i("APKStaticAnalyzer", "Extra dangerous permission found: $name")
-				return true
-			}
+                LogUtils.i("APKStaticAnalyzer", "Extra dangerous permission found: $name")
+                return true
+            }
             if (Utils.DANGEROUS_PERMISSIONS.contains(name)) {
-				LogUtils.i("APKStaticAnalyzer", "Dangerous permission found: $name")
-				counter++
-			}
+                LogUtils.i("APKStaticAnalyzer", "Dangerous permission found: $name")
+                counter++
+            }
         }
         return counter > Utils.DANGEROUS_PERMISSIONS_THRESHOLD
     }
