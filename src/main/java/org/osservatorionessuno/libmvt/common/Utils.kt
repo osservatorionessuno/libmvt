@@ -430,4 +430,44 @@ object Utils {
 		"e3fb91ecb1a9c23acf6431fbaceb15ac68a21831", // Mattermost
 		"8c68c13822723a2b1fa844bed340031beb1f9463", // Twitch
     )
+
+    /** APK zip entries Bugbane/MVT retain for IOCs (assets, raw/xml resources, native libs). */
+    @JvmStatic
+    fun isTrackedApkEntry(name: String): Boolean =
+        name.startsWith("assets/")
+            || name.startsWith("res/raw/")
+            || name.startsWith("res/xml/")
+            || name.startsWith("lib/")
+
+
+    /** Single-quote for `/system/bin/sh -c` arguments. */
+    @JvmStatic
+    fun shQuote(s: String): String = "'" + s.replace("'", "'\\''") + "'"
+
+    /**
+     * Decode `service call` hex dump lines (`0xADDR: w0 w1 w2 w3 '....'`) into raw Parcel bytes.
+     * Words are little-endian uint32 values as stored in the Parcel.
+     */
+    @JvmStatic
+    fun parcelBytesFromServiceCallOutput(output: String): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        for (line in output.lineSequence()) {
+            val trimmed = line.trim()
+            val m = SERVICE_CALL_HEX_LINE.matchEntire(trimmed) ?: continue
+            for (word in m.groupValues[1].trim().split(WHITESPACE)) {
+                if (word.length != 8) continue
+                val v = word.toLongOrNull(16) ?: continue
+                out.write((v and 0xff).toInt())
+                out.write(((v shr 8) and 0xff).toInt())
+                out.write(((v shr 16) and 0xff).toInt())
+                out.write(((v shr 24) and 0xff).toInt())
+            }
+        }
+        return out.toByteArray()
+    }
+
+    private val SERVICE_CALL_HEX_LINE = Regex(
+        """^0x[0-9a-fA-F]+:\s*((?:[0-9a-fA-F]{8}\s*){1,4})(?:'.*')?\s*$""",
+    )
+    private val WHITESPACE = Regex("\\s+")
 }
