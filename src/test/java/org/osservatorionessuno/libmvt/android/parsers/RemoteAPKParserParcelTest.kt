@@ -84,6 +84,7 @@ class RemoteAPKParserParcelTest {
               Length      Date    Time    Name
             ---------  ---------- -----   ----
                 21280  1981-01-01 01:01   AndroidManifest.xml
+                    0  1981-01-01 01:01   assets/
                    10  1981-01-01 01:01   assets/foo.bin
                    20  1981-01-01 01:01   res/raw/cfg.xml
                    30  1981-01-01 01:01   res/xml/network.xml
