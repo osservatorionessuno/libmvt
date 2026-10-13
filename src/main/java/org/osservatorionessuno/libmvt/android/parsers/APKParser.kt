@@ -15,7 +15,10 @@ object APKParser {
         val versionName: String,
         val files: List<String>,
         val certificates: List<CertificateParser.CertificateInfo>,
-        /** Whether the APK signature verified. False means [certificates] are unauthenticated. */
+        /**
+         * Whether the APK signature verified: by apksig here, or by the device's PackageManager at
+         * install time for [RemoteAPKParser]. False means [certificates] are unauthenticated.
+         */
         val verified: Boolean,
         val suspicious: Boolean,
     )

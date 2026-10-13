@@ -25,7 +25,7 @@ class RemoteAPKParserParcelTest {
         val cert = certs[0]
         assertTrue(cert.subject.contains("Android Debug"), "subject=${cert.subject}")
         assertEquals("8d1db85f19ae87349d423232510710bbe9694c87", cert.checksums.sha1)
-        // PM-attested only — never trusted without apksig verify.
+        // Attested by PackageManager, but a debug key is not allowlisted.
         assertFalse(cert.trusted)
     }
 
@@ -282,8 +282,8 @@ class RemoteAPKParserParcelTest {
         assertEquals(local.versionName, remote.versionName)
         assertEquals(local.files.sorted(), remote.files.sorted())
         assertEquals(local.suspicious, remote.suspicious)
-        // Remote never claims apksig verification.
-        assertFalse(remote.verified)
+        // PackageManager's install record stands in for apksig; the fake shell always answers.
+        assertTrue(remote.verified)
         assertEquals(
             local.certificates.map { it.checksums.sha1 }.sorted(),
             remote.certificates.map { it.checksums.sha1 }.sorted(),
@@ -293,6 +293,28 @@ class RemoteAPKParserParcelTest {
             remote.certificates.map { it.checksums.sha256 }.sorted(),
         )
         assertTrue(remote.certificates.all { !it.trusted })
+    }
+
+    @Test
+    fun allowlistedAttestedSignerSkipsTheHeuristicLikeTheLocalPath() {
+        val apk = ResourcesUtils.readResourceFile("apks/signed_test.apk")
+        val local = APKParser.parseAPK(apk)
+        val sha1 = local.certificates[0].checksums.sha1
+        val shell = LocalApkShell(apk, local.packageName)
+        Utils.VALID_CERTIFICATES.add(sha1)
+        try {
+            val remote = RemoteAPKParser.parse(shell, local.packageName, apk.absolutePath)
+            assertTrue(remote.verified)
+            assertTrue(remote.certificates.single().trusted)
+            assertFalse(remote.suspicious)
+            assertEquals(APKParser.parseAPK(apk).suspicious, remote.suspicious)
+        } finally {
+            Utils.VALID_CERTIFICATES.remove(sha1)
+        }
+        // No certificates from PackageManager: unverified, heuristic decides.
+        val unknown = RemoteAPKParser.parse(shell, "com.example.missing", apk.absolutePath)
+        assertFalse(unknown.verified)
+        assertEquals(local.suspicious, unknown.suspicious)
     }
 
     /** Simulates device shell tools by answering from a local APK file. */
