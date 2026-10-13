@@ -132,12 +132,12 @@ object RemoteAPKParser {
             "service call package $code s16 ${Utils.shQuote(packageName)} $flagsType $SIGNING_FLAGS i32 $userId"
     }
 
-    /** `unzip -l` name column, filtered like [Utils.isTrackedApkEntry]. */
+    /** `unzip -l` name column, filtered like [Utils.isTrackedApkEntry]; directories dropped like [LenientZipInputStream.fileNames]. */
     @JvmStatic
     fun parseUnzipList(output: String): List<String> =
         output.lineSequence()
             .mapNotNull { UNZIP_LIST_LINE.matchEntire(it)?.groupValues?.get(1) }
-            .filter(Utils::isTrackedApkEntry)
+            .filter { !it.endsWith("/") && Utils.isTrackedApkEntry(it) }
             .toList()
 
     /** `  Length  Date  Time  Name`; name may contain spaces. Header/footer rows don't match. */
