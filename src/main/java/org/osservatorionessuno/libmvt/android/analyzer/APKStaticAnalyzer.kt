@@ -99,7 +99,8 @@ object APKStaticAnalyzer {
                 return true
             }
             if (Utils.DANGEROUS_PERMISSIONS.contains(name)) {
-                LogUtils.i("APKStaticAnalyzer", "Dangerous permission found: $name")
+                // Debug: too many hits, and info lands on stdout where the CLI prints its JSON.
+                LogUtils.d("APKStaticAnalyzer", "Dangerous permission found: $name")
                 counter++
             }
         }
