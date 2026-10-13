@@ -17,8 +17,9 @@ import java.security.cert.X509Certificate
  * Since we don't want to drop an agent on the device, we use a couple of shell commands.
  *
  * Limits vs local [APKParser]:
- * - [APKParser.APKInfo.verified] is always false (should we trust Android service call?).
- * - Therefore allowlist [CertificateParser.CertificateInfo.trusted] stays false.
+ * - Certificates come from PackageManager's install record, i.e. the framework's own apksig run
+ *   at install time, so [APKParser.APKInfo.verified] is true whenever it returned any. Only a
+ *   root-level attacker can forge that record, and one that can also owns `adb pull`.
  * - [Session] caches the `getPackageInfo` transaction code for one acquisition.
  */
 object RemoteAPKParser {
@@ -88,12 +89,12 @@ object RemoteAPKParser {
                     .getOrNull()
             }
 
-            // Certs are PM-attested only, so always run the static heuristic. Without a usable
-            // manifest fall back to the `pm dump` permission list.
-            val suspicious = if (info != null) {
-                APKStaticAnalyzer.analyze(info.manifest)
-            } else {
-                APKStaticAnalyzer.permissionsLookSuspicious(pm.requestedPermissions)
+            // Same gate as the local path: a verified, allowlisted signer skips the heuristic.
+            // Without a usable manifest fall back to the `pm dump` permission list.
+            val suspicious = when {
+                certificates.any { it.trusted } -> false
+                info != null -> APKStaticAnalyzer.analyze(info.manifest)
+                else -> APKStaticAnalyzer.permissionsLookSuspicious(pm.requestedPermissions)
             }
 
             return APKParser.APKInfo(
@@ -102,7 +103,7 @@ object RemoteAPKParser {
                 versionName = info?.versionName?.ifBlank { null } ?: pm.versionName,
                 files = files,
                 certificates = certificates,
-                verified = false,
+                verified = certificates.isNotEmpty(),
                 suspicious = suspicious,
             )
         }
@@ -145,7 +146,8 @@ object RemoteAPKParser {
     /**
      * Scan Parcel bytes for X.509 certs. At each ASN.1 SEQUENCE start (`0x30`), let
      * [CertificateFactory] parse — no hand-rolled DER length decoding.
-     * Dedupes by SHA-256 of the encoded cert.
+     * Dedupes by SHA-256 of the encoded cert. Only feed this a `getPackageInfo` reply:
+     * the certificates are marked signature-verified on PackageManager's word.
      */
     @JvmStatic
     fun certificatesFromParcelBytes(parcel: ByteArray): List<CertificateParser.CertificateInfo> {
@@ -166,8 +168,8 @@ object RemoteAPKParser {
                 i++
                 continue
             }
-            // PM-attested only — never claim apksig verification.
-            val info = CertificateParser.fromX509Certificate(cert, false)
+            // PackageManager verified this signature when it installed the package.
+            val info = CertificateParser.fromX509Certificate(cert, true)
             if (seen.add(info.checksums.sha256)) result.add(info)
             // Skip what the factory consumed (junk after a false 0x30 advances by 1 above).
             i += (parcel.size - i) - stream.available()
