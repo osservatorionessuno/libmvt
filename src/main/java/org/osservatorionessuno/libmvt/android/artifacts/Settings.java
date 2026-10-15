@@ -18,6 +18,7 @@ public class Settings extends AndroidArtifact {
 
     private static final HashMap<String, DangerousSetting> DANGEROUS_SETTINGS = new HashMap<>();
 
+    // TODO: find a way to make the following fields translatable
     static {
         add("verifier_verify_adb_installs", "1", "disabled Google Play Services apps verification");
         add("package_verifier_enable", "1", "disabled Google Play Protect");
@@ -35,6 +36,14 @@ public class Settings extends AndroidArtifact {
         DangerousSetting ds = new DangerousSetting();
         ds.key = key; ds.safeValue = safeVal; ds.description = desc;
         DANGEROUS_SETTINGS.put(key, ds);
+    }
+
+    /** Description when [value] is unsafe for a known dangerous key, otherwise null. */
+    static String getUnsafeSettingDescription(String key, String value) {
+        if (key == null || value == null) return null;
+        DangerousSetting ds = DANGEROUS_SETTINGS.get(key);
+        if (ds == null || ds.safeValue.equals(value)) return null;
+        return ds.description;
     }
 
     @Override
@@ -61,12 +70,11 @@ public class Settings extends AndroidArtifact {
         @SuppressWarnings("unchecked")
         Map<String, String> settings = (Map<String, String>) record;
         for (Map.Entry<String, String> entry : settings.entrySet()) {
-            DangerousSetting ds = DANGEROUS_SETTINGS.get(entry.getKey());
-            if (ds != null &&
-                !ds.safeValue.equals(entry.getValue())) {
+            String description = getUnsafeSettingDescription(entry.getKey(), entry.getValue());
+            if (description != null) {
                 detected.add(new Detection(
                         DetectionType.DANGEROUS_SETTINGS,
-                        ds.description,
+                        description,
                         entry.getKey(),
                         entry.getValue()));
             }

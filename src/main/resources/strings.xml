@@ -45,6 +45,14 @@
     <string name="mvt_anr_package_name_message">The following potentially suspicious ANR crashes were found:</string>
     <string name="mvt_selinux_status_title">SELinux protection status</string>
     <string name="mvt_selinux_status_message">SELinux is not being enforced.</string>
+    <string name="mvt_device_owner_title">Device owner app</string>
+    <string name="mvt_device_owner_message">An app is the device owner and can control this device:</string>
+    <string name="mvt_profile_owner_title">Profile owner app</string>
+    <string name="mvt_profile_owner_message">An app is the profile owner and can control a user profile:</string>
+    <string name="mvt_device_admin_title">Device admin apps</string>
+    <string name="mvt_device_admin_message">The following device admin apps are active:</string>
+    <string name="mvt_device_policy_accessibility_title">Enabled accessibility services</string>
+    <string name="mvt_device_policy_accessibility_message">The following accessibility services are enabled:</string>
     <string name="mvt_artifact_parse_failed_title">Incomplete analysis</string>
     <string name="mvt_artifact_parse_failed_message">These parts of the acquisition could not be read, so they were left unanalysed:</string>
 </resources>

@@ -18,9 +18,11 @@ object ArtifactModuleRegistry {
         { DumpsysBatteryDaily() },
         { DumpsysBatteryHistory() },
         { DumpsysDBInfo() },
+        { DumpsysDevicePolicy() },
         { DumpsysPackages() },
         { DumpsysPlatformCompat() },
         { DumpsysReceivers() },
+        { DumpsysSettings() },
         { TombstoneCrashes() },
         { ANR() },
         // AndroidQF modules

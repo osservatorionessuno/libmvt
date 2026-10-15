@@ -170,6 +170,31 @@ enum class DetectionType(
         "mvt_anr_package_name_title",
         "mvt_anr_package_name_message",
     ),
+    DEVICE_OWNER(
+        "device_owner",
+        AlertLevel.HIGH,
+        "mvt_device_owner_title",
+        "mvt_device_owner_message",
+    ),
+    PROFILE_OWNER(
+        "profile_owner",
+        AlertLevel.MEDIUM,
+        "mvt_profile_owner_title",
+        "mvt_profile_owner_message",
+    ),
+    DEVICE_ADMIN(
+        "device_admin",
+        AlertLevel.INFO,
+        "mvt_device_admin_title",
+        "mvt_device_admin_message",
+    ),
+    /** An accessibility service enabled on the device, from dumpsys device_policy. */
+    DEVICE_POLICY_ACCESSIBILITY(
+        "device_policy_accessibility",
+        AlertLevel.MEDIUM,
+        "mvt_device_policy_accessibility_title",
+        "mvt_device_policy_accessibility_message",
+    ),
 
     /** A module failed on an artifact, so that artifact was not analysed. */
     ARTIFACT_PARSE_FAILED(

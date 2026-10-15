@@ -1,0 +1,19 @@
+DUMP OF SERVICE settings:
+Settings:
+  GLOBAL SETTINGS (user 0)
+    version: 3
+    _id:1 name:package_verifier_enable pkg:android value:0 default:1 defaultSystemSet:false
+    _id:2 name:package_verifier_user_consent pkg:android value:1 default:1 defaultSystemSet:false
+
+  SECURE SETTINGS (user 0)
+    version: 4
+    _id:10 name:accessibility_enabled pkg:com.android.shell value:1 default:0 defaultSystemSet:false
+    _id:11 name:lock_screen_lock_after_timeout pkg:com.android.shell value:5000 default:null defaultSystemSet:false
+    _id:12 name:enabled_accessibility_services pkg:android value:com.foo/.A
+com.bar/.B default:null defaultSystemSet:false
+  SYSTEM SETTINGS (user 0)
+    version: 1
+    _id:1 name:volume_music pkg:android value:5 default:null defaultSystemSet:false
+-------------------------------------------------------------------------------
+DUMP OF SERVICE adb:
+    _id:99 name:package_verifier_enable pkg:android value:0 default:1 defaultSystemSet:false

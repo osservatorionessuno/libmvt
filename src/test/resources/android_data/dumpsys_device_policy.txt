@@ -1,0 +1,176 @@
+DUMP OF SERVICE device_policy:
+Current Device Policy Manager state:
+  Immutable state:
+    mHasFeature=true
+    mIsWatch=false
+    mIsAutomotive=false
+    mHasTelephonyFeature=true
+    mSafetyChecker=null
+
+
+
+  Enabled Device Admins (User 0, provisioningState: 0):
+
+    mPasswordOwner=-1
+    mPasswordTokenHandle=0
+    mAppsSuspended=false
+    mUserSetupComplete=true
+    mAffiliationIds={}
+    mNewUserDisclaimer=null
+
+    PersonalAppsSuspensionHelper
+      critical packages: empty
+      launcher packages: 2 apps
+        0: com.android.launcher3
+        1: com.android.settings
+      accessibility services: empty
+      input method packages: 1 app
+        0: com.android.inputmethod.latin
+      SMS package: com.android.messaging
+      Settings package: com.android.settings
+      Packages subject to suspension: 11 apps
+        0: com.android.documentsui
+        1: com.android.quicksearchbox
+        2: com.android.contacts
+        3: com.android.camera2
+        4: com.android.stk
+        5: com.aurora.store
+        6: com.android.calendar
+        7: com.android.gallery3d
+        8: org.chromium.webview_shell
+        9: org.osservatorionessuno.bugbane.beta
+        10: com.android.deskclock
+
+
+  Enabled Device Admins (User 10, provisioningState: 0):
+    com.example.infectedwebview/.DeviceAdmin:
+      uid=1010132
+      testOnlyAdmin=false
+      policies:
+      passwordQuality=0x0
+      minimumPasswordLength=0
+      passwordHistoryLength=0
+      minimumPasswordUpperCase=0
+      minimumPasswordLowerCase=0
+      minimumPasswordLetters=1
+      minimumPasswordNumeric=1
+      minimumPasswordSymbols=1
+      minimumPasswordNonLetter=0
+      maximumTimeToUnlock=0
+      strongAuthUnlockTimeout=0
+      maximumFailedPasswordsForWipe=0
+      specifiesGlobalProxy=false
+      passwordExpirationTimeout=0
+      passwordExpirationDate=0
+      encryptionRequested=false
+      disableCamera=false
+      disableCallerId=false
+      disableContactsSearch=false
+      disableBluetoothContactSharing=true
+      disableScreenCapture=false
+      requireAutoTime=false
+      forceEphemeralUsers=false
+      isNetworkLoggingEnabled=false
+      disabledKeyguardFeatures=0
+      crossProfileWidgetProviders=null
+      organizationColor=-16746133
+      userRestrictions:
+        null
+      defaultEnabledRestrictionsAlreadySet={}
+      isParent=false
+      mCrossProfileCalendarPackages=[]
+      mCrossProfilePackages=[]
+      mSuspendPersonalApps=false
+      mProfileMaximumTimeOffMillis=0
+      mProfileOffDeadline=0
+      mAlwaysOnVpnPackage=null
+      mAlwaysOnVpnLockdown=false
+      mPreferentialNetworkServiceEnabled=false
+      mCommonCriteriaMode=false
+      mPasswordComplexity=0
+      mNearbyNotificationStreamingPolicy=3
+      mNearbyAppStreamingPolicy=3
+      mAdminCanGrantSensorsPermissions=false
+      mUsbDataSignaling=true
+      mWifiMinimumSecurityLevel=0
+      mPreferentialNetworkServiceConfigs:
+        networkId=0
+        isEnabled=false
+        allowFallbackToDefaultConnection=true
+        includedUids=[I@979e84e
+        excludedUids=[I@803dd6f
+
+    mPasswordOwner=-1
+    mPasswordTokenHandle=0
+    mAppsSuspended=false
+    mUserSetupComplete=true
+    mAffiliationIds={}
+    mNewUserDisclaimer=not_needed
+
+
+  Constants:
+    DAS_DIED_SERVICE_RECONNECT_BACKOFF_SEC: 3600
+    DAS_DIED_SERVICE_RECONNECT_BACKOFF_INCREASE: 2.0
+    DAS_DIED_SERVICE_RECONNECT_MAX_BACKOFF_SEC: 86400
+    DAS_DIED_SERVICE_STABLE_CONNECTION_THRESHOLD_SEC: 120
+
+  Stats:
+    LockGuard.guard(): count=1130, total=17.5ms, avg=0.016ms, max calls/s=84 max dur/s=13.8ms max time=13.7ms
+
+  Encryption Status: per-user
+  Logout user: -10000
+
+  no pending user created callback tokens
+
+  Device policy cache:
+    Screen capture disallowed user: -10000
+    Password quality: {0=0, 10=0}
+    Permission policy: {0=0, 10=0}
+    Admin can grant sensors permission: {0=false, 10=false}
+
+  Device state cache:
+    Device provisioned: true
+
+  OverlayPackagesProvider
+    required_apps_managed_device: 9 apps
+      0: com.android.settings
+      1: com.android.systemui
+      2: com.android.contacts
+      3: com.android.dialer
+      4: com.android.stk
+      5: com.android.providers.downloads
+      6: com.android.providers.downloads.ui
+      7: com.android.documentsui
+      8: com.android.cellbroadcastreceiver
+    required_apps_managed_user: 8 apps
+      0: com.android.settings
+      1: com.android.systemui
+      2: com.android.contacts
+      3: com.android.dialer
+      4: com.android.stk
+      5: com.android.providers.downloads
+      6: com.android.providers.downloads.ui
+      7: com.android.documentsui
+    required_apps_managed_profile: 6 apps
+      0: com.android.contacts
+      1: com.android.settings
+      2: com.android.systemui
+      3: com.android.providers.downloads
+      4: com.android.providers.downloads.ui
+      5: com.android.documentsui
+    disallowed_apps_managed_device: empty
+    disallowed_apps_managed_user: empty
+    disallowed_apps_managed_device: empty
+    vendor_required_apps_managed_device: empty
+    vendor_required_apps_managed_user: empty
+    vendor_required_apps_managed_profile: empty
+    vendor_disallowed_apps_managed_user: empty
+    vendor_disallowed_apps_managed_device: empty
+    vendor_disallowed_apps_managed_profile: empty
+
+  Other overlayable app resources
+    cross_profile_apps: empty
+    vendor_cross_profile_apps: empty
+    config_packagesExemptFromSuspension: empty
+    policy_exempt_apps: empty
+    vendor_policy_exempt_apps: empty
