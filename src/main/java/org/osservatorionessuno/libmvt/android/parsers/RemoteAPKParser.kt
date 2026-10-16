@@ -5,6 +5,7 @@ import org.osservatorionessuno.libmvt.common.Utils
 import org.osservatorionessuno.libmvt.common.logging.LogUtils
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.io.OutputStream
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
@@ -34,6 +35,9 @@ object RemoteAPKParser {
     /**
      * Minimal shell surface so this parser stays free of bugbane/cadb.
      * [org.osservatorionessuno.cadb.AdbShell] satisfies this in Analyst mode.
+     *
+     * Throw [IOException] when a command cannot run: that step degrades and parsing goes on.
+     * Anything else, a user cancel for instance, propagates out of [Session.parse] untouched.
      */
     interface Shell {
         fun execForEachLine(command: String, onLine: (String) -> Unit)
@@ -62,6 +66,10 @@ object RemoteAPKParser {
     class Session(private val shell: Shell) {
         private var packageInfoCode: Int? = null
 
+        // Split APKs parse the same package several times in a row: answer from the first.
+        private val certificateCache = HashMap<Pair<String, Int>, List<CertificateParser.CertificateInfo>>()
+        private val pmDumpCache = HashMap<String, PmDumpInfo>()
+
         /**
          * `IPackageManager.getPackageInfo(String, flags, int userId)` takes `int flags` before API 33
          * and `long flags` after, so the `service call` argument width must match or `userId` is
@@ -69,19 +77,23 @@ object RemoteAPKParser {
          * releases too (the high word doubles as userId=0).
          */
         private val flagsType: String by lazy {
-            val sdk = runCatching {
+            val sdk = shellOr(0, "getprop failed") {
                 var v = 0
                 shell.execForEachLine("getprop ro.build.version.sdk") { v = it.trim().toIntOrNull() ?: v }
                 v
-            }.getOrDefault(0)
+            }
             if (sdk in 1..32) "i32" else "i64"
         }
 
         /** [userId] is the Android user the package is installed for (0 = owner, 10+ = profiles). */
         fun parse(packageName: String, apkPath: String, userId: Int = 0): APKParser.APKInfo {
             val files = listTrackedEntries(shell, apkPath)
-            val certificates = certificatesViaServiceCall(packageName, userId)
-            val pm = fetchPmDump(shell, packageName)
+            val certificates = certificateCache[packageName to userId]
+                ?: certificatesViaServiceCall(packageName, userId)
+                    .also { if (it.isNotEmpty()) certificateCache[packageName to userId] = it }
+            val pm = pmDumpCache[packageName]
+                ?: fetchPmDump(shell, packageName)?.also { pmDumpCache[packageName] = it }
+                ?: PmDumpInfo()
 
             val info = extractManifest(shell, apkPath)?.let { bytes ->
                 runCatching { ManifestParser().parseManifest(ByteArrayInputStream(bytes), false) }
@@ -114,11 +126,11 @@ object RemoteAPKParser {
         ): List<CertificateParser.CertificateInfo> {
             val codes = packageInfoCode?.let { it..it } ?: PACKAGE_INFO_CODES
             for (code in codes) {
-                val certs = runCatching {
+                val certs = shellOr(emptyList(), "service call $code failed for $packageName") {
                     val out = StringBuilder()
                     shell.execForEachLine(serviceCallCmd(code, packageName, userId)) { out.appendLine(it) }
                     certificatesFromParcelBytes(Utils.parcelBytesFromServiceCallOutput(out.toString()))
-                }.getOrDefault(emptyList())
+                }
                 if (certs.isNotEmpty()) {
                     packageInfoCode = code
                     return certs
@@ -138,6 +150,7 @@ object RemoteAPKParser {
         output.lineSequence()
             .mapNotNull { UNZIP_LIST_LINE.matchEntire(it)?.groupValues?.get(1) }
             .filter { !it.endsWith("/") && Utils.isTrackedApkEntry(it) }
+            .distinct() // a retried command re-streams its output
             .toList()
 
     /** `  Length  Date  Time  Name`; name may contain spaces. Header/footer rows don't match. */
@@ -211,33 +224,34 @@ object RemoteAPKParser {
         return PmDumpInfo(versionName, versionCode, requested)
     }
 
-    private fun listTrackedEntries(shell: Shell, apkPath: String): List<String> {
-        val quoted = Utils.shQuote(apkPath)
-        return runCatching {
+    private fun listTrackedEntries(shell: Shell, apkPath: String): List<String> =
+        shellOr(emptyList(), "unzip -l failed for $apkPath") {
             val sb = StringBuilder()
-            shell.execForEachLine("unzip -l $quoted") { sb.appendLine(it) }
+            shell.execForEachLine("unzip -l ${Utils.shQuote(apkPath)}") { sb.appendLine(it) }
             parseUnzipList(sb.toString())
-        }.onFailure { LogUtils.w(TAG, "unzip -l failed for $apkPath: ${it.message}") }
-            .getOrDefault(emptyList())
-    }
+        }
 
-    private fun extractManifest(shell: Shell, apkPath: String): ByteArray? {
-        val quoted = Utils.shQuote(apkPath)
-        return runCatching {
+    private fun extractManifest(shell: Shell, apkPath: String): ByteArray? =
+        shellOr(null, "unzip -p AndroidManifest.xml failed for $apkPath") {
             val buf = ByteArrayOutputStream()
-            shell.execToStream("unzip -p $quoted AndroidManifest.xml", buf)
+            shell.execToStream("unzip -p ${Utils.shQuote(apkPath)} AndroidManifest.xml", buf)
             buf.toByteArray().takeIf { it.isNotEmpty() }
-        }.onFailure { LogUtils.w(TAG, "unzip -p AndroidManifest.xml failed for $apkPath: ${it.message}") }
-            .getOrNull()
-    }
+        }
 
-    private fun fetchPmDump(shell: Shell, packageName: String): PmDumpInfo {
-        val quoted = Utils.shQuote(packageName)
-        return runCatching {
+    /** Null when the command failed, so the caller does not cache it. */
+    private fun fetchPmDump(shell: Shell, packageName: String): PmDumpInfo? =
+        shellOr(null, "pm dump failed for $packageName") {
             val sb = StringBuilder()
-            shell.execForEachLine("pm dump $quoted") { sb.appendLine(it) }
+            shell.execForEachLine("pm dump ${Utils.shQuote(packageName)}") { sb.appendLine(it) }
             parsePmDumpOutput(sb.toString())
-        }.onFailure { LogUtils.w(TAG, "pm dump failed for $packageName: ${it.message}") }
-            .getOrDefault(PmDumpInfo())
-    }
+        }
+
+    /** A command that cannot run degrades to [fallback]; see [Shell]. */
+    private inline fun <T> shellOr(fallback: T, what: String, block: () -> T): T =
+        try {
+            block()
+        } catch (e: IOException) {
+            LogUtils.w(TAG, "$what: ${e.message}")
+            fallback
+        }
 }

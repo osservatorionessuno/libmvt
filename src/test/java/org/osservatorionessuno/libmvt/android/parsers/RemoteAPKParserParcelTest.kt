@@ -205,12 +205,14 @@ class RemoteAPKParserParcelTest {
         shell.failServiceCalls = false
         checkCalls("com.example.missing", (2..12).toList(), false)
         checkCalls(local.packageName, listOf(2, 3, 4), true)
-        checkCalls(local.packageName, listOf(4), true)
+        // Same package again (a split APK): answered from the session, no call at all.
+        checkCalls(local.packageName, emptyList(), true)
         checkCalls("com.example.missing", listOf(4), false)
         shell.failServiceCalls = true
-        checkCalls(local.packageName, listOf(4), false)
+        checkCalls(local.packageName, emptyList(), true)
+        checkCalls("com.example.missing", listOf(4), false)
         shell.failServiceCalls = false
-        checkCalls(local.packageName, listOf(4), true)
+        checkCalls("com.example.missing", listOf(4), false)
     }
 
     @Test
@@ -229,9 +231,40 @@ class RemoteAPKParserParcelTest {
 
         checkCalls(firstSession, first, listOf(2, 3))
         checkCalls(secondSession, second, listOf(2, 3, 4, 5))
-        checkCalls(firstSession, first, listOf(3))
-        checkCalls(secondSession, second, listOf(5))
+        checkCalls(firstSession, first, emptyList())
+        checkCalls(secondSession, second, emptyList())
         checkCalls(RemoteAPKParser.Session(first), first, listOf(2, 3))
+    }
+
+    @Test
+    fun onlyIoFailuresDegrade_anythingElsePropagates() {
+        val apk = ResourcesUtils.readResourceFile("apks/signed_test.apk")
+        val pkg = APKParser.parseAPK(apk).packageName
+        class Cancelled : RuntimeException("user cancelled")
+        val cancelling = object : RemoteAPKParser.Shell {
+            override fun execForEachLine(command: String, onLine: (String) -> Unit) = throw Cancelled()
+            override fun execToStream(command: String, output: OutputStream) = throw Cancelled()
+        }
+        org.junit.jupiter.api.Assertions.assertThrows(Cancelled::class.java) {
+            RemoteAPKParser.parse(cancelling, pkg, apk.absolutePath)
+        }
+        val offline = object : RemoteAPKParser.Shell {
+            override fun execForEachLine(command: String, onLine: (String) -> Unit) = throw java.io.IOException("gone")
+            override fun execToStream(command: String, output: OutputStream) = throw java.io.IOException("gone")
+        }
+        val info = RemoteAPKParser.parse(offline, pkg, apk.absolutePath)
+        assertFalse(info.verified)
+        assertTrue(info.certificates.isEmpty())
+        assertEquals(pkg, info.packageName)
+    }
+
+    @Test
+    fun parseUnzipList_dedupesRestreamedOutput() {
+        val listing = """
+               10  1981-01-01 01:01   assets/foo.bin
+               10  1981-01-01 01:01   assets/foo.bin
+        """.trimIndent()
+        assertEquals(listOf("assets/foo.bin"), RemoteAPKParser.parseUnzipList(listing))
     }
 
     @Test
