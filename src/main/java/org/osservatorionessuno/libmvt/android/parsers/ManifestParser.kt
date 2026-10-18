@@ -12,8 +12,7 @@ import java.io.StringReader
 import java.lang.reflect.InvocationTargetException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import javax.xml.XMLConstants
-import javax.xml.parsers.DocumentBuilderFactory
+import org.osservatorionessuno.libmvt.common.Utils
 import org.xml.sax.InputSource
 
 class ManifestParser {
@@ -78,15 +77,13 @@ class ManifestParser {
      * Uses [rednaga/axmlprinter](https://github.com/rednaga/axmlprinter)
      */
     @Throws(IOException::class)
+    @Deprecated("Use the AXMLResource class instead")
     private fun _parseManifestWithAxmlprinter(input: InputStream): Document {
         val xml = AXMLResource(input).toXML()
 
-        val factory = DocumentBuilderFactory.newInstance()
-        factory.isNamespaceAware = true
-        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
-        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-        val builder = factory.newDocumentBuilder()
-        val document = builder.parse(InputSource(StringReader(xml)))
+        val document = Utils.secureDocumentBuilderFactory(namespaceAware = true)
+            .newDocumentBuilder()
+            .parse(InputSource(StringReader(xml)))
         return document
     }
 

@@ -3,6 +3,8 @@ package org.osservatorionessuno.libmvt.common
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import javax.xml.XMLConstants
+import javax.xml.parsers.DocumentBuilderFactory
 
 object Utils {
     private val ISO = DateTimeFormatter.ISO_INSTANT
@@ -443,6 +445,50 @@ object Utils {
     /** Single-quote for `/system/bin/sh -c` arguments. */
     @JvmStatic
     fun shQuote(s: String): String = "'" + s.replace("'", "'\\''") + "'"
+
+    /**
+     * XXE-hardened [DocumentBuilderFactory]. Android's implementation throws
+     * [javax.xml.parsers.ParserConfigurationException] for
+     * [XMLConstants.FEATURE_SECURE_PROCESSING] (and often the Apache disallow-doctype URI),
+     * so unsupported features are skipped rather than aborting parse.
+     * For device-controlled text, also call [rejectDoctypeDeclarations] first.
+     */
+    @JvmStatic
+    @JvmOverloads
+    fun secureDocumentBuilderFactory(namespaceAware: Boolean = false): DocumentBuilderFactory {
+        val factory = DocumentBuilderFactory.newInstance()
+        factory.isNamespaceAware = namespaceAware
+        factory.isExpandEntityReferences = false
+        runCatching { factory.isXIncludeAware = false }
+        fun setFeature(name: String, value: Boolean) {
+            runCatching { factory.setFeature(name, value) }
+        }
+        // Ignore exceptions since Android doesn't support some of the features.
+        setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
+        setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+        setFeature("http://xml.org/sax/features/external-general-entities", false)
+        setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+        runCatching {
+            factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "")
+            factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "")
+        }
+        return factory
+    }
+
+    /**
+     * Fail before DocumentBuilder if [xml] declares a DOCTYPE or ENTITY.
+     * On Android the Apache options to disable XXE are not available, so reject before the DocumentBuilder is created.
+     */
+    @JvmStatic
+    fun rejectDoctypeDeclarations(xml: String) {
+        if (xml.contains("<!DOCTYPE", ignoreCase = true) ||
+            xml.contains("<!ENTITY", ignoreCase = true)
+        ) {
+            throw IllegalArgumentException(
+                "DOCTYPE/ENTITY declarations are not allowed in untrusted XML",
+            )
+        }
+    }
 
     /**
      * Decode `service call` hex dump lines (`0xADDR: w0 w1 w2 w3 '....'`) into raw Parcel bytes.
