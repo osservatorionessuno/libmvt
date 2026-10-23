@@ -8,6 +8,7 @@ import org.osservatorionessuno.libmvt.common.Indicators.IndicatorType;
 
 import java.util.List;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Iterator;
 import java.util.Objects;
@@ -26,6 +27,18 @@ public class Files extends AndroidArtifact {
     private static final Set<String> SUSPICIOUS_PATHS = Set.of(
         "/data/local/tmp/"
     );
+
+    private String collectorExePath;
+    private String collectorSha256;
+
+    /**
+     * Ignore the androidqf collector binary when path and SHA-256 both match.
+     */
+    public void setCollector(String exePath, String sha256) {
+        collectorExePath = blankToNull(exePath);
+        String hash = blankToNull(sha256);
+        collectorSha256 = hash != null ? hash.toLowerCase(Locale.ROOT) : null;
+    }
 
     @Override
     public List<String> paths() {
@@ -111,6 +124,12 @@ public class Files extends AndroidArtifact {
         String path = Objects.toString(file.get("path"), "");
         if (path.isEmpty()) return;
 
+        Object sha256Obj = file.get("sha256");
+        String sha256 = (sha256Obj != null) ? sha256Obj.toString() : "";
+
+        // Known collector binary from acquisition.json, skip it.
+        if (isOwnCollector(path, sha256)) return;
+
         if (indicators != null
                 && detected.addAll(indicators.matchString(path, IndicatorType.FILE_PATH))) {
             return; // if any indicator matches, skip the rest
@@ -124,13 +143,22 @@ public class Files extends AndroidArtifact {
         }
 
         if (indicators == null) return;
-
-        Object sha256Obj = file.get("sha256");
-        String sha256 = (sha256Obj != null) ? sha256Obj.toString() : "";
         if (sha256.isEmpty()) return;
 
         // Check if file hash matches any indicator
         detected.addAll(indicators.matchString(sha256, IndicatorType.FILE_HASH_SHA256));
+    }
+
+    private boolean isOwnCollector(String path, String sha256) {
+        if (collectorExePath == null || !path.equals(collectorExePath)) return false;
+        if (collectorSha256 == null || sha256.isEmpty()) return false;
+        return sha256.equalsIgnoreCase(collectorSha256);
+    }
+
+    private static String blankToNull(String s) {
+        if (s == null) return null;
+        String t = s.trim();
+        return t.isEmpty() ? null : t;
     }
 
     /**

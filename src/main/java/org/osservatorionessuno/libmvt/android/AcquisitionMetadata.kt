@@ -16,6 +16,10 @@ data class AcquisitionMetadata(
     val completed: String?,
     val bugbaneVersion: String?,
     val androidqfVersion: String?,
+    /** On-device collector binary path from `collector.ExePath` (androidqf). */
+    val collectorExePath: String? = null,
+    /** SHA-256 of that binary from `collector.SHA256` (androidqf). */
+    val collectorSha256: String? = null,
 ) {
     /** Human-readable [created], or null if unset. */
     val createdFormatted: String? get() = formatTimestamp(created)
@@ -29,6 +33,15 @@ data class AcquisitionMetadata(
             putOpt("completed", completed)
             putOpt("bugbane_version", bugbaneVersion)
             putOpt("androidqf_version", androidqfVersion)
+            if (collectorExePath != null || collectorSha256 != null) {
+                put(
+                    "collector",
+                    JSONObject().apply {
+                        putOpt("ExePath", collectorExePath)
+                        putOpt("SHA256", collectorSha256)
+                    },
+                )
+            }
         }
 
     companion object {
@@ -55,11 +68,19 @@ data class AcquisitionMetadata(
             val completed = root.optString("completed").asMeaningfulTimestamp()
             val bugbaneVersion = root.optString("bugbane_version").nullIfBlank()
             val androidqfVersion = root.optString("androidqf_version").nullIfBlank()
+            val collector = root.optJSONObject("collector")
+            val collectorExePath = collector?.optString("ExePath")?.nullIfBlank()
+            // androidqf uses SHA256; accept a few casings for hand-edited / older dumps.
+            val collectorSha256 = sequenceOf("SHA256", "Sha256", "sha256")
+                .mapNotNull { key -> collector?.optString(key)?.nullIfBlank() }
+                .firstOrNull()
             return AcquisitionMetadata(
                 created = created,
                 completed = completed,
                 bugbaneVersion = bugbaneVersion,
                 androidqfVersion = androidqfVersion,
+                collectorExePath = collectorExePath,
+                collectorSha256 = collectorSha256,
             )
         }
 

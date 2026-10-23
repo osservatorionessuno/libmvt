@@ -14,6 +14,7 @@ public class DumpsysAccessibility extends DumpsysArtifact {
     @Override
     public void parse(AbstractInput artifactInput) throws IOException {
         Pattern legacyPattern = Pattern.compile("\\s*(\\d+) : (.+)");
+        // TODO: verify if works on Android
         Pattern v14Pattern = Pattern.compile("\\{\\{(.+?)\\}\\}", Pattern.DOTALL);
         boolean[] inLegacyBlock = {false};
         boolean[] inV14Search = {false};

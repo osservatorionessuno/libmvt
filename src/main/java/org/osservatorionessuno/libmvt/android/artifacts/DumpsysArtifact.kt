@@ -6,6 +6,7 @@ abstract class DumpsysArtifact : AndroidArtifact() {
 
     companion object {
         @JvmField
-        val DUMPSYS_PATHS: List<String> = listOf("dumpsys.txt", "bugreport-*.txt")
+        // dumpsys_<service>.txt: Bugbane sidecars when a required service was missing from the full dump.
+        val DUMPSYS_PATHS: List<String> = listOf("dumpsys.txt", "dumpsys_*.txt", "bugreport-*.txt")
     }
 }

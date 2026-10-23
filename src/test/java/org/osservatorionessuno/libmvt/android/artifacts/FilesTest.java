@@ -195,4 +195,40 @@ public class FilesTest {
         assertDetection(files.detected, DetectionType.IOC_MATCH, AlertLevel.CRITICAL);
         assertDetectionValueContains(files.detected, DetectionType.IOC_MATCH, sha256);
     }
+
+    /** Matching collector.ExePath + SHA256 must not raise FILES_SUSPICIOUS_PATH. */
+    @Test
+    public void testCollectorBinaryIsFiltered() throws Exception {
+        String path = "/data/local/tmp/collector";
+        String sha256 = "87e7e7a28ab69fbc377f60ba5c5640d31735cf8eb9af4de35f78b40e0e2970b1";
+        Files files = streamArtifact(
+                Files::new,
+                "files.json",
+                json(String.format(
+                        "[{\"path\":\"%s\",\"mode\":\"-rwxr-xr-x\",\"sha256\":\"%s\"}]",
+                        path, sha256)),
+                null,
+                null,
+                a -> a.setCollector(path, sha256));
+
+        assertEquals(0, files.detected.size());
+    }
+
+    /** Path match alone is not enough — a different hash is still suspicious. */
+    @Test
+    public void testCollectorPathWithWrongHashStillSuspicious() throws Exception {
+        String path = "/data/local/tmp/collector";
+        Files files = streamArtifact(
+                Files::new,
+                "files.json",
+                json(String.format(
+                        "[{\"path\":\"%s\",\"mode\":\"-rwxr-xr-x\",\"sha256\":\"%s\"}]",
+                        path, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")),
+                null,
+                null,
+                a -> a.setCollector(path, "87e7e7a28ab69fbc377f60ba5c5640d31735cf8eb9af4de35f78b40e0e2970b1"));
+
+        assertEquals(1, files.detected.size());
+        assertDetection(files.detected, DetectionType.FILES_SUSPICIOUS_PATH, AlertLevel.HIGH);
+    }
 }

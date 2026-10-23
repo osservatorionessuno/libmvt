@@ -2,6 +2,7 @@ package org.osservatorionessuno.libmvt.android
 
 import org.osservatorionessuno.libmvt.android.artifacts.AndroidArtifact
 import org.osservatorionessuno.libmvt.android.artifacts.DumpsysAdb
+import org.osservatorionessuno.libmvt.android.artifacts.Files
 import org.osservatorionessuno.libmvt.common.AbstractInput
 import org.osservatorionessuno.libmvt.common.Artifact
 import org.osservatorionessuno.libmvt.common.Detection
@@ -50,6 +51,8 @@ private class SkippedArtifact : AndroidArtifact() {
 class ForensicRunner(private val stringResolver: StringResolver) {
     private var indicators: Indicators? = null
     private var adbHostKeys: List<String> = emptyList()
+    private var collectorExePath: String? = null
+    private var collectorSha256: String? = null
 
     /** Assign indicators to use for IOC matching. */
     fun setIndicators(indicators: Indicators?) {
@@ -67,12 +70,27 @@ class ForensicRunner(private val stringResolver: StringResolver) {
     }
 
     /**
+     * On-device collector identity from acquisition.json (`collector.ExePath` / `collector.SHA256`).
+     * [Files] skips that path when the listed SHA-256 matches.
+     */
+    fun setCollector(exePath: String?, sha256: String?) {
+        collectorExePath = exePath?.trim()?.takeIf { it.isNotEmpty() }
+        collectorSha256 = sha256?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
+    fun applyAcquisitionMetadata(meta: AcquisitionMetadata?) {
+        if (meta == null) return
+        setCollector(meta.collectorExePath, meta.collectorSha256)
+    }
+
+    /**
      * This is an insecure method to analyze a plaintext directory.
      * This should NOT be used in Bugbane, since it parses plaintext files.
      */
     @Throws(Exception::class)
     fun streamLegacyAnalysisFromDirectory(directory: File): Map<String, Artifact> {
         LogUtils.d(TAG, "streamLegacyAnalysisFromDirectory: $directory")
+        applyAcquisitionMetadata(AcquisitionMetadata.load(directory))
         val results = LinkedHashMap<String, Artifact>()
         collectFromDirectory(directory, directory, results)
         return results
@@ -82,6 +100,7 @@ class ForensicRunner(private val stringResolver: StringResolver) {
     @Throws(Exception::class)
     fun streamAnalysisFromZip(zip: File): Map<String, Artifact> {
         LogUtils.d(TAG, "streamAnalysisFromZip: $zip")
+        applyAcquisitionMetadata(AcquisitionMetadata.load(zip))
         val results = LinkedHashMap<String, Artifact>()
         try {
             ZipFile(zip).use { zipFile ->
@@ -288,6 +307,9 @@ class ForensicRunner(private val stringResolver: StringResolver) {
         }
         if (artifact is DumpsysAdb && adbHostKeys.isNotEmpty()) {
             artifact.setHostKeys(adbHostKeys)
+        }
+        if (artifact is Files) {
+            artifact.setCollector(collectorExePath, collectorSha256)
         }
     }
 

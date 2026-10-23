@@ -3,6 +3,10 @@ package org.osservatorionessuno.libmvt.android.artifacts
 import org.osservatorionessuno.libmvt.common.AbstractInput
 import org.osservatorionessuno.libmvt.common.Detection
 import org.osservatorionessuno.libmvt.common.DetectionType
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
+import java.time.format.ResolverStyle
 
 /**
  * Parser for the settings service inside a bugreport dumpsys.
@@ -15,58 +19,89 @@ import org.osservatorionessuno.libmvt.common.DetectionType
 class DumpsysSettings : DumpsysArtifact() {
 
     override fun parse(artifactInput: AbstractInput) {
+        val section = StringBuilder()
+        // Buffer the section: history needs the trailing "ending at:" line, which
+        // extractDumpsysSection still delivers before the 79-dash delimiter.
+        extractDumpsysSection(artifactInput.inputStream, " settings:") { section.appendLine(it) }
+        parseSection(section.toString())
+    }
+
+    /** Visible for tests that feed a settings section without the DUMP OF SERVICE frame. */
+    fun parseSection(content: String) {
+        val sectionEnd = parseSectionEnd(content)
         var namespace: String? = null
-        val current = StringBuilder()
+        var user: String? = null
+        val recordLines = mutableListOf<String>()
+        val historyLines = mutableListOf<String>()
+        var inHistory = false
 
         fun flush() {
-            if (namespace == null || current.isEmpty()) {
-                current.clear()
-                return
+            if (recordLines.isNotEmpty()) {
+                emit(buildRecord(namespace, user, recordLines, historyLines, sectionEnd))
             }
-            val fields = parseSetting(current.toString())
-            current.clear()
-            val name = fields["name"] ?: return
-            emit(
-                mapOf(
-                    "namespace" to namespace,
-                    "name" to name,
-                    "value" to (fields["value"] ?: ""),
-                    "pkg" to (fields["pkg"] ?: ""),
-                )
-            )
+            recordLines.clear()
+            historyLines.clear()
+            inHistory = false
         }
 
-        // " settings:" so notification_settings and similar services do not match.
-        extractDumpsysSection(artifactInput.inputStream, " settings:") { raw ->
-            val line = raw.trim()
-            if (line.isEmpty()) {
-                if (current.isNotEmpty()) current.append('\n')
-                return@extractDumpsysSection
-            }
-            val nextNamespace = namespaceOf(line)
-            if (nextNamespace != null) {
+        for (line in content.lineSequence()) {
+            val heading = NAMESPACE_PATTERN.matchEntire(line.trim())
+            if (heading != null) {
                 flush()
-                namespace = nextNamespace
-                return@extractDumpsysSection
+                namespace = heading.groupValues[1].lowercase()
+                user = heading.groupValues[2]
+                continue
             }
-            if (namespace == null) return@extractDumpsysSection
-            if (line.lowercase().startsWith("version")) return@extractDumpsysSection
+
+            if (line.startsWith("--------- ")) {
+                flush()
+                namespace = null
+                continue
+            }
+
+            if (namespace == null) continue
+
+            // Blank line closes the record: dumpsys prints one after every
+            // namespace block / history, and the generation registry follows.
+            if (line.isBlank()) {
+                flush()
+                continue
+            }
+
             if (line.startsWith("_id:")) {
                 flush()
-                current.append(line)
-            } else if (current.isNotEmpty()) {
-                current.append('\n').append(raw)
+                recordLines.add(line)
+                continue
             }
+
+            if (recordLines.isEmpty()) continue
+
+            val stripped = line.trim()
+            if (stripped.startsWith("History (")) {
+                inHistory = true
+                continue
+            }
+
+            if (inHistory) {
+                if (stripped.startsWith("time:")) {
+                    historyLines.add(stripped)
+                } else if (stripped.isNotEmpty() && historyLines.isNotEmpty()) {
+                    historyLines[historyLines.lastIndex] += " $stripped"
+                }
+                continue
+            }
+
+            recordLines.add(line)
         }
         flush()
     }
 
     override fun checkRecord(record: Any) {
         @Suppress("UNCHECKED_CAST")
-        val setting = record as? Map<String, String> ?: return
-        val key = setting["name"] ?: return
-        val value = setting["value"] ?: ""
-        val pkg = setting["pkg"] ?: ""
+        val setting = record as? Map<String, Any?> ?: return
+        val key = setting["name"] as? String ?: return
+        val value = setting["value"] as? String ?: ""
+        val pkg = setting["pkg"] as? String ?: ""
 
         val description = Settings.getUnsafeSettingDescription(key, value)
         if (description != null) {
@@ -78,44 +113,114 @@ class DumpsysSettings : DumpsysArtifact() {
                     DetectionType.DANGEROUS_SETTINGS,
                     "was modified by $pkg",
                     key,
-                    value
-                )
+                    value,
+                ),
             )
         }
     }
 
-    private fun namespaceOf(line: String): String? = when {
-        line.startsWith("CONFIG SETTINGS") -> "config"
-        line.startsWith("GLOBAL SETTINGS") -> "global"
-        line.startsWith("SECURE SETTINGS") -> "secure"
-        line.startsWith("SYSTEM SETTINGS") -> "system"
-        else -> null
-    }
-
-    /**
-     * Fields are marked in order (` name:`, ` pkg:`, ` value:`, …). A value may
-     * contain spaces and newlines, so this slices on those markers rather than
-     * splitting on whitespace.
-     */
-    private fun parseSetting(setting: String): Map<String, String> {
-        val fields = LinkedHashMap<String, String>()
-        var offset = 0
-        for (marker in FIELD_MARKERS) {
-            val end = if (marker == END) setting.length else setting.indexOf(marker)
-            if (end <= 0) continue
-            val substr = setting.substring(offset, end).trim()
-            val colon = substr.indexOf(':')
-            if (colon > 0) {
-                fields[substr.substring(0, colon).trim()] = substr.substring(colon + 1).trim()
-            }
-            offset = end
+    private fun buildRecord(
+        namespace: String?,
+        user: String?,
+        recordLines: List<String>,
+        historyLines: List<String>,
+        sectionEnd: LocalDateTime?,
+    ): Map<String, Any?> {
+        var text = recordLines.joinToString("\n").trimEnd()
+        // Bare token has no key: shape and is printed last.
+        val head = text.removeSuffix(" notPreservedInRestore")
+        val record = LinkedHashMap<String, Any?>()
+        record["namespace"] = namespace
+        record["user"] = user
+        record.putAll(splitFields(head, SETTING_FIELDS))
+        if (head != text) {
+            record["isValuePreservedInRestore"] = "false"
         }
-        return fields
+        record["history"] = historyLines.map { parseHistory(it, sectionEnd) }
+        return record
     }
 
-    private companion object {
+    private fun parseHistory(line: String, sectionEnd: LocalDateTime?): Map<String, Any?> {
+        val fields = splitFields(line, HISTORY_FIELDS)
+        return mapOf(
+            "timestamp" to resolveTimestamp(fields["time"].orEmpty(), sectionEnd),
+            "oldValue" to fields["oldValue"],
+            "newValue" to fields["newValue"],
+            "pkg" to fields["package"],
+        )
+    }
+
+    companion object {
         val DANGEROUS_PACKAGES = setOf("com.android.shell")
-        const val END = "end"
-        val FIELD_MARKERS = listOf(" name:", " pkg:", " value:", " default:", " defaultSystemSet:", END)
+
+        private val SETTING_FIELDS = listOf(
+            "_id", "name", "pkg", "value", "default", "defaultSystemSet",
+            "tag", "isValuePreservedInRestore",
+        )
+        private val HISTORY_FIELDS = listOf("time", "mode", "oldValue", "newValue", "package")
+
+        private val NAMESPACE_PATTERN =
+            Regex("""^(CONFIG|GLOBAL|SECURE|SYSTEM) SETTINGS \(user (\d+)\)$""")
+        private val SECTION_END_PATTERN =
+            Regex("""ending at: (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})""")
+
+        private val SECTION_END_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+        // STRICT: SMART would turn 2025-02-29 into 2025-02-28 and break leap-day year search.
+        private val HISTORY_PARSE = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss.SSS")
+            .withResolverStyle(ResolverStyle.STRICT)
+        private val HISTORY_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS")
+
+        /**
+         * Split the `key:value` fields of one record. Values are free-form, so a
+         * field runs up to the next key that is actually present.
+         */
+        @JvmStatic
+        fun splitFields(text: String, keys: List<String>): Map<String, String> {
+            if (keys.isEmpty() || !text.startsWith("${keys[0]}:")) return emptyMap()
+            val fields = LinkedHashMap<String, String>()
+            var key = keys[0]
+            var remainder = text.substring(key.length + 1)
+            for (nextKey in keys.drop(1)) {
+                val marker = " $nextKey:"
+                val at = remainder.indexOf(marker)
+                if (at >= 0) {
+                    fields[key] = remainder.substring(0, at)
+                    key = nextKey
+                    remainder = remainder.substring(at + marker.length)
+                }
+            }
+            fields[key] = remainder
+            return fields
+        }
+
+        @JvmStatic
+        fun parseSectionEnd(content: String): LocalDateTime? {
+            val match = SECTION_END_PATTERN.find(content) ?: return null
+            return try {
+                LocalDateTime.parse(match.groupValues[1], SECTION_END_FORMAT)
+            } catch (_: DateTimeParseException) {
+                null
+            }
+        }
+
+        /**
+         * dumpsys history timestamps lack a year; resolve against [sectionEnd]
+         * as the most recent matching date at or before that time.
+         */
+        @JvmStatic
+        fun resolveTimestamp(value: String, sectionEnd: LocalDateTime?): String? {
+            if (sectionEnd == null || value.isBlank()) return null
+            for (year in sectionEnd.year downTo sectionEnd.year - 8) {
+                val timestamp = try {
+                    LocalDateTime.parse("$year-$value", HISTORY_PARSE)
+                } catch (_: DateTimeParseException) {
+                    continue
+                }
+                if (!timestamp.isAfter(sectionEnd)) {
+                    return timestamp.format(HISTORY_FORMAT)
+                }
+            }
+            return null
+        }
     }
 }

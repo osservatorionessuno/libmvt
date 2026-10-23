@@ -60,10 +60,21 @@ public final class DetectionTestUtils {
             InputStream data,
             Indicators indicators,
             List<Object> records) throws Exception {
+        return streamArtifact(factory, path, data, indicators, records, null);
+    }
+
+    public static <T extends AndroidArtifact> T streamArtifact(
+            Supplier<T> factory,
+            String path,
+            InputStream data,
+            Indicators indicators,
+            List<Object> records,
+            Consumer<T> configure) throws Exception {
         T artifact = parseArtifact(factory, path, data, a -> {
             a.setStringResolver(new JvmMapStringResolver());
             a.setIndicators(indicators);
             if (records != null) a.setRecordObserver(records::add);
+            if (configure != null) configure.accept(a);
         });
         artifact.checkIndicators();
         return artifact;

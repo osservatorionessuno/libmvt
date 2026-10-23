@@ -63,6 +63,25 @@ public class AcquisitionMetadataTest {
     }
 
     @Test
+    public void testFromJsonCollectorExePathAndSha256() {
+        AcquisitionMetadata meta = AcquisitionMetadata.fromJson("""
+            {
+              "started": "2025-12-08T14:10:15.142602Z",
+              "collector": {
+                "ExePath": "/data/local/tmp/collector",
+                "SHA256": "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
+                "Installed": false
+              }
+            }
+            """);
+
+        assertEquals("/data/local/tmp/collector", meta.getCollectorExePath());
+        assertEquals(
+                "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
+                meta.getCollectorSha256());
+    }
+
+    @Test
     public void testLoadFromDirectory() throws Exception {
         File dir = tempDir.toFile();
         File metaFile = new File(dir, "acquisition.json");

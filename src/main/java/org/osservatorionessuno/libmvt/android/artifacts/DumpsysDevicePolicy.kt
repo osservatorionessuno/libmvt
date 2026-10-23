@@ -136,7 +136,7 @@ class DumpsysDevicePolicy : DumpsysArtifact() {
         val ACCESSIBILITY_HEADER = Regex("""^accessibility services: (.+)$""")
         val APP_COUNT = Regex("""^(\d+) apps?$""")
         val INDEXED_PACKAGE = Regex("""^\d+:\s+(\S+)$""")
-        val COMPONENT_INFO = Regex("""ComponentInfo\{([^/}]+)/([^}]+)}""")
+        val COMPONENT_INFO = Regex("""ComponentInfo[{]([^/}]+)/([^}]+)[}]""")
         val PACKAGE_NAME = Regex("""(?:^|[\s{,])packageName=([^\s,}]+)""")
         val PACKAGE = Regex("""(?:^|[\s{,])package=([^\s,}]+)""")
     }
