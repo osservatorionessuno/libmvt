@@ -9,6 +9,8 @@ import java.io.IOException
 import java.io.OutputStream
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
+import java.util.Base64
+import java.util.zip.GZIPInputStream
 
 /**
  * When in Analyst mode, Bugbane uses a remote adb shell to interact with the device.
@@ -21,7 +23,8 @@ import java.security.cert.X509Certificate
  * - Certificates come from PackageManager's install record, i.e. the framework's own apksig run
  *   at install time, so [APKParser.APKInfo.verified] is true whenever it returned any. Only a
  *   root-level attacker can forge that record, and one that can also owns `adb pull`.
- * - [Session] caches the `getPackageInfo` transaction code for one acquisition.
+ * - [Session] caches the `getPackageInfo` transaction code for one acquisition, and
+ *   [Session.prefetch] fetches a whole batch of APKs with one command.
  */
 object RemoteAPKParser {
     private const val TAG = "RemoteAPKParser"
@@ -43,6 +46,9 @@ object RemoteAPKParser {
         fun execForEachLine(command: String, onLine: (String) -> Unit)
         fun execToStream(command: String, output: OutputStream)
     }
+
+    /** One APK of a [Session.prefetch] batch; [userId] as in [Session.parse]. */
+    data class Apk(val packageName: String, val apkPath: String, val userId: Int = 0)
 
     data class PmDumpInfo(
         val versionName: String = "",
@@ -85,17 +91,99 @@ object RemoteAPKParser {
             if (sdk in 1..32) "i32" else "i64"
         }
 
+        // Filled by prefetch, consumed by the next parse of that path: holds one batch at most.
+        private val entriesCache = HashMap<String, List<String>>()
+        private val manifestCache = HashMap<String, ByteArray>()
+
+        /**
+         * Fetch the file list, signer certificates and manifest of every APK in [apks] with one
+         * shell command, gzipped on the device, instead of three round trips per APK. The next
+         * [parse] of each path answers from the session; whatever the command did not deliver,
+         * because the link or a tool failed part-way, is fetched per APK as before.
+         */
+        fun prefetch(apks: List<Apk>) {
+            if (apks.isEmpty()) return
+            // The getPackageInfo ordinal is probed on the first package the slow way.
+            if (packageInfoCode == null) apks.first().let { first ->
+                certificatesViaServiceCall(first.packageName, first.userId)
+                    .also { if (it.isNotEmpty()) certificateCache[first.packageName to first.userId] = it }
+            }
+            val code = packageInfoCode
+            val certPending = HashSet<Pair<String, Int>>()
+            val calls = apks.mapIndexed { i, apk ->
+                val wantCert = code != null && (apk.packageName to apk.userId) !in certificateCache &&
+                    certPending.add(apk.packageName to apk.userId)
+                "a $i ${Utils.shQuote(apk.apkPath)} ${if (wantCert) Utils.shQuote(apk.packageName) else "''"} ${apk.userId}"
+            }
+            // Only tracked entries leave the device; stderr stays out of the gzip stream.
+            val script = "a(){ printf '==APK %s==\\n==LIST==\\n' \"\$1\"; unzip -l \"\$2\" | grep -E ' (assets|lib|res/raw|res/xml)/'; " +
+                "[ -n \"\$3\" ] && { printf '==CERT==\\n'; service call package $code s16 \"\$3\" $flagsType $SIGNING_FLAGS i32 \"\$4\"; }; " +
+                "printf '==MANIFEST==\\n'; unzip -p \"\$2\" AndroidManifest.xml | base64; printf '\\n==END==\\n'; }; " +
+                "{ ${calls.joinToString("; ")}; } 2>/dev/null | gzip"
+            val compressed = ByteArrayOutputStream()
+            shellOr(Unit, "APK batch failed") { shell.execToStream(script, compressed) }
+            ingest(apks, compressed.toByteArray())
+        }
+
+        /** Caches every APK whose sections arrived whole; a truncated stream stops at the cut. */
+        private fun ingest(apks: List<Apk>, compressed: ByteArray) {
+            var apk: Apk? = null
+            var section: StringBuilder? = null
+            val list = StringBuilder()
+            val cert = StringBuilder()
+            val manifest = StringBuilder()
+            var certSeen = false
+            // Inflate first: a Reader over a cut stream drops the lines it already decoded.
+            val text = ByteArrayOutputStream()
+            try {
+                GZIPInputStream(ByteArrayInputStream(compressed)).copyTo(text)
+            } catch (e: IOException) {
+                LogUtils.w(TAG, "APK batch output ended early: ${e.message}")
+            }
+            for (line in String(text.toByteArray(), Charsets.UTF_8).lineSequence()) when {
+                line.startsWith("==APK ") -> {
+                    apk = apks.getOrNull(line.removePrefix("==APK ").removeSuffix("==").toIntOrNull() ?: -1)
+                    list.setLength(0); cert.setLength(0); manifest.setLength(0)
+                    certSeen = false
+                    section = null
+                }
+                line == "==LIST==" -> section = list
+                line == "==CERT==" -> { section = cert; certSeen = true }
+                line == "==MANIFEST==" -> section = manifest
+                line == "==END==" -> {
+                    apk?.let { done ->
+                        entriesCache[done.apkPath] = parseUnzipList(list.toString())
+                        manifestCache[done.apkPath] = runCatching { Base64.getMimeDecoder().decode(manifest.toString()) }
+                            .getOrDefault(ByteArray(0))
+                        if (certSeen) {
+                            certificatesFromParcelBytes(Utils.parcelBytesFromServiceCallOutput(cert.toString()))
+                                .takeIf { it.isNotEmpty() }
+                                ?.let { certificateCache[done.packageName to done.userId] = it }
+                        }
+                    }
+                    apk = null
+                    section = null
+                }
+                else -> section?.appendLine(line)
+            }
+        }
+
         /** [userId] is the Android user the package is installed for (0 = owner, 10+ = profiles). */
         fun parse(packageName: String, apkPath: String, userId: Int = 0): APKParser.APKInfo {
-            val files = listTrackedEntries(shell, apkPath)
+            val files = entriesCache.remove(apkPath) ?: listTrackedEntries(shell, apkPath)
             val certificates = certificateCache[packageName to userId]
                 ?: certificatesViaServiceCall(packageName, userId)
                     .also { if (it.isNotEmpty()) certificateCache[packageName to userId] = it }
-            val pm = pmDumpCache[packageName]
-                ?: fetchPmDump(shell, packageName)?.also { pmDumpCache[packageName] = it }
-                ?: PmDumpInfo()
+            // Only needed when the manifest is missing or incomplete.
+            val pm by lazy {
+                pmDumpCache[packageName]
+                    ?: fetchPmDump(shell, packageName)?.also { pmDumpCache[packageName] = it }
+                    ?: PmDumpInfo()
+            }
 
-            val info = extractManifest(shell, apkPath)?.let { bytes ->
+            val manifestBytes = if (apkPath in manifestCache) manifestCache.remove(apkPath)?.takeIf { it.isNotEmpty() }
+                else extractManifest(shell, apkPath)
+            val info = manifestBytes?.let { bytes ->
                 runCatching { ManifestParser().parseManifest(ByteArrayInputStream(bytes), false) }
                     .onFailure { LogUtils.w(TAG, "Manifest parse failed for $apkPath: ${it.message}") }
                     .getOrNull()

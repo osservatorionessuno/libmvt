@@ -248,11 +248,15 @@ class RemoteAPKParserParcelTest {
         org.junit.jupiter.api.Assertions.assertThrows(Cancelled::class.java) {
             RemoteAPKParser.parse(cancelling, pkg, apk.absolutePath)
         }
+        org.junit.jupiter.api.Assertions.assertThrows(Cancelled::class.java) {
+            RemoteAPKParser.Session(cancelling).prefetch(listOf(RemoteAPKParser.Apk(pkg, apk.absolutePath)))
+        }
         val offline = object : RemoteAPKParser.Shell {
             override fun execForEachLine(command: String, onLine: (String) -> Unit) = throw java.io.IOException("gone")
             override fun execToStream(command: String, output: OutputStream) = throw java.io.IOException("gone")
         }
         val info = RemoteAPKParser.parse(offline, pkg, apk.absolutePath)
+        RemoteAPKParser.Session(offline).prefetch(listOf(RemoteAPKParser.Apk(pkg, apk.absolutePath)))
         assertFalse(info.verified)
         assertTrue(info.certificates.isEmpty())
         assertEquals(pkg, info.packageName)
@@ -351,6 +355,67 @@ class RemoteAPKParserParcelTest {
         assertEquals(local.suspicious, unknown.suspicious)
     }
 
+    @Test
+    fun prefetchAnswersTheBatchFromOneCommand() {
+        val signed = ResourcesUtils.readResourceFile("apks/signed_test.apk")
+        val tampered = ResourcesUtils.readResourceFile("apks/tampered_test.apk")
+        val local = APKParser.parseAPK(signed)
+        val shell = LocalApkShell(signed, local.packageName, serviceCallCode = 4)
+        val session = RemoteAPKParser.Session(shell)
+        session.prefetch(
+            listOf(
+                RemoteAPKParser.Apk(local.packageName, signed.absolutePath),
+                RemoteAPKParser.Apk("com.example.missing", tampered.absolutePath),
+            ),
+        )
+        // Ordinal discovery on the first package, then the batch itself.
+        assertEquals(listOf(2, 3, 4), shell.serviceCallCodes)
+        assertEquals(listOf(1, 1), listOf(shell.commands.count { "==APK " in it }, shell.commands.count { it.startsWith("getprop") }))
+        shell.commands.clear()
+        shell.serviceCallCodes.clear()
+
+        val remote = session.parse(local.packageName, signed.absolutePath)
+        assertEquals(local.files.sorted(), remote.files.sorted())
+        assertEquals(local.certificates, remote.certificates)
+        assertEquals(local.versionName, remote.versionName)
+        assertEquals(local.versionCode, remote.versionCode)
+        assertEquals(local.suspicious, remote.suspicious)
+        assertTrue(remote.verified)
+        assertTrue(shell.commands.isEmpty(), "answered from the batch, got ${shell.commands}")
+
+        // The batch had no signer for the missing package: only that step is retried per package.
+        val missing = session.parse("com.example.missing", tampered.absolutePath)
+        assertEquals(APKParser.parseAPK(tampered).files.sorted(), missing.files.sorted())
+        assertFalse(missing.verified)
+        assertEquals(listOf(4), shell.serviceCallCodes)
+        assertTrue(shell.commands.all { it.startsWith("service call ") }, shell.commands.toString())
+    }
+
+    @Test
+    fun prefetchKeepsWhatArrivedBeforeTheLinkDied() {
+        val signed = ResourcesUtils.readResourceFile("apks/signed_test.apk")
+        val tampered = ResourcesUtils.readResourceFile("apks/tampered_test.apk")
+        val local = APKParser.parseAPK(signed)
+        val shell = LocalApkShell(signed, local.packageName).apply { batchDiesAfterFirst = true }
+        val session = RemoteAPKParser.Session(shell)
+        session.prefetch(
+            listOf(
+                RemoteAPKParser.Apk(local.packageName, signed.absolutePath),
+                RemoteAPKParser.Apk(local.packageName, tampered.absolutePath),
+            ),
+        )
+        shell.commands.clear()
+        val first = session.parse(local.packageName, signed.absolutePath)
+        assertEquals(local.files.sorted(), first.files.sorted())
+        assertEquals(local.certificates, first.certificates)
+        assertTrue(shell.commands.isEmpty(), shell.commands.toString())
+
+        // The second APK was cut off: fetched per APK as before.
+        val second = session.parse(local.packageName, tampered.absolutePath)
+        assertEquals(APKParser.parseAPK(tampered).files.sorted(), second.files.sorted())
+        assertTrue(shell.commands.any { it.startsWith("unzip -l ") } && shell.commands.any { it.startsWith("unzip -p ") }, shell.commands.toString())
+    }
+
     /** Simulates device shell tools by answering from a local APK file. */
     private class LocalApkShell(
         private val apk: File,
@@ -362,16 +427,20 @@ class RemoteAPKParserParcelTest {
     ) : RemoteAPKParser.Shell {
         private val der: ByteArray = signerDer(apk)
         val serviceCallCodes = mutableListOf<Int>()
+        val commands = mutableListOf<String>()
         var failServiceCalls = false
+        /** The link drops after the first APK of a batch, as a stalled Wi-Fi run does. */
+        var batchDiesAfterFirst = false
 
         override fun execForEachLine(command: String, onLine: (String) -> Unit) {
+            commands.add(command)
             if (command.startsWith("service call package ")) {
                 serviceCallCodes.add(command.split(' ')[3].toInt())
                 if (failServiceCalls) throw java.io.IOException("ADB connection interrupted")
             }
             when {
                 command.startsWith("unzip -l ") ->
-                    unzipListOutput().lineSequence().forEach(onLine)
+                    unzipListOutput(apk).lineSequence().forEach(onLine)
                 command.startsWith("pm dump ") ->
                     pmDumpOutput().lineSequence().forEach(onLine)
                 command == "getprop ro.build.version.sdk" -> onLine(sdk.toString())
@@ -384,19 +453,50 @@ class RemoteAPKParserParcelTest {
         }
 
         override fun execToStream(command: String, output: OutputStream) {
+            commands.add(command)
+            if (command.contains("==APK ")) return batch(command, output)
             if (!command.contains("AndroidManifest.xml")) return
-            ZipFile(apk).use { zip ->
-                val entry = zip.getEntry("AndroidManifest.xml") ?: return
-                zip.getInputStream(entry).use { it.copyTo(output) }
-            }
+            output.write(manifestBytes(apk))
         }
 
-        private fun unzipListOutput(): String {
+        /** Answers the prefetch script like the device: one section block per `a` call, gzipped. */
+        private fun batch(command: String, output: OutputStream) {
+            val code = Regex("service call package (\\d+) ").find(command)?.groupValues?.get(1)?.toInt()
+            val calls = Regex("a (\\d+) '([^']*)' '([^']*)' (\\d+)").findAll(command).toList()
+            // syncFlush: what was written before a cut is readable, as a device's gzip pipe is.
+            val gzip = java.util.zip.GZIPOutputStream(output, true)
+            for ((n, call) in calls.withIndex()) {
+                if (n == 1 && batchDiesAfterFirst) {
+                    gzip.flush()
+                    throw java.io.IOException("gone")
+                }
+                val (i, path, pkg, uid) = call.destructured
+                val file = File(path)
+                val text = StringBuilder("==APK $i==\n==LIST==\n").append(unzipListOutput(file))
+                if (pkg.isNotEmpty()) {
+                    text.append("==CERT==\n")
+                    if (pkg == packageName && code == serviceCallCode && uid.toInt() == userId) {
+                        text.append(formatServiceCallDump(packageName.toByteArray(parcelCharset) + der))
+                    }
+                }
+                text.append("==MANIFEST==\n")
+                    .append(java.util.Base64.getMimeEncoder().encodeToString(manifestBytes(file)))
+                    .append("\n==END==\n")
+                gzip.write(text.toString().toByteArray())
+            }
+            gzip.finish()
+        }
+
+        private fun manifestBytes(file: File): ByteArray = ZipFile(file).use { zip ->
+            zip.getInputStream(zip.getEntry("AndroidManifest.xml") ?: return ByteArray(0)).use { it.readBytes() }
+        }
+
+        private fun unzipListOutput(file: File): String {
             val sb = StringBuilder()
-            sb.appendLine("Archive:  ${apk.absolutePath}")
+            sb.appendLine("Archive:  ${file.absolutePath}")
             sb.appendLine("  Length      Date    Time    Name")
             sb.appendLine("---------  ---------- -----   ----")
-            ZipFile(apk).use { zip ->
+            ZipFile(file).use { zip ->
                 for (entry in zip.entries()) {
                     if (entry.isDirectory) continue
                     sb.appendLine(
