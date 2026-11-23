@@ -96,10 +96,9 @@ object RemoteAPKParser {
         private val manifestCache = HashMap<String, ByteArray>()
 
         /**
-         * Fetch the file list, signer certificates and manifest of every APK in [apks] with one
-         * shell command, gzipped on the device, instead of three round trips per APK. The next
-         * [parse] of each path answers from the session; whatever the command did not deliver,
-         * because the link or a tool failed part-way, is fetched per APK as before.
+         * Fetch file lists, signer certificates and manifests for [apks] with one gzipped shell
+         * command. [parse] then answers from the session; anything the command did not deliver
+         * is fetched per APK.
          */
         fun prefetch(apks: List<Apk>) {
             if (apks.isEmpty()) return
@@ -115,10 +114,11 @@ object RemoteAPKParser {
                     certPending.add(apk.packageName to apk.userId)
                 "a $i ${Utils.shQuote(apk.apkPath)} ${if (wantCert) Utils.shQuote(apk.packageName) else "''"} ${apk.userId}"
             }
+            val cert = if (code == null) "" else
+                "[ -n \"\$3\" ] && { printf '==CERT==\\n'; service call package $code s16 \"\$3\" $flagsType $SIGNING_FLAGS i32 \"\$4\"; }; "
             // Only tracked entries leave the device; stderr stays out of the gzip stream.
             val script = "a(){ printf '==APK %s==\\n==LIST==\\n' \"\$1\"; unzip -l \"\$2\" | grep -E ' (assets|lib|res/raw|res/xml)/'; " +
-                "[ -n \"\$3\" ] && { printf '==CERT==\\n'; service call package $code s16 \"\$3\" $flagsType $SIGNING_FLAGS i32 \"\$4\"; }; " +
-                "printf '==MANIFEST==\\n'; unzip -p \"\$2\" AndroidManifest.xml | base64; printf '\\n==END==\\n'; }; " +
+                cert + "printf '==MANIFEST==\\n'; unzip -p \"\$2\" AndroidManifest.xml | base64; printf '\\n==END==\\n'; }; " +
                 "{ ${calls.joinToString("; ")}; } 2>/dev/null | gzip"
             val compressed = ByteArrayOutputStream()
             shellOr(Unit, "APK batch failed") { shell.execToStream(script, compressed) }
@@ -143,7 +143,7 @@ object RemoteAPKParser {
             for (line in String(text.toByteArray(), Charsets.UTF_8).lineSequence()) when {
                 line.startsWith("==APK ") -> {
                     apk = apks.getOrNull(line.removePrefix("==APK ").removeSuffix("==").toIntOrNull() ?: -1)
-                    list.setLength(0); cert.setLength(0); manifest.setLength(0)
+                    for (b in arrayOf(list, cert, manifest)) b.setLength(0)
                     certSeen = false
                     section = null
                 }
@@ -174,7 +174,7 @@ object RemoteAPKParser {
             val certificates = certificateCache[packageName to userId]
                 ?: certificatesViaServiceCall(packageName, userId)
                     .also { if (it.isNotEmpty()) certificateCache[packageName to userId] = it }
-            // Only needed when the manifest is missing or incomplete.
+            // Fetched only when the manifest is missing or incomplete.
             val pm by lazy {
                 pmDumpCache[packageName]
                     ?: fetchPmDump(shell, packageName)?.also { pmDumpCache[packageName] = it }

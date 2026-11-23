@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "org.osservatorionessuno"
-version = "0.4.4"
+version = "0.4.5"
 
 val generatedSourcesDir = layout.buildDirectory.dir("generated/sources/buildInfo/kotlin")
 
